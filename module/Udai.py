@@ -25,7 +25,7 @@ def difference(dataset: pd.Series,
         # 作成した階差データを準備しておいたリストに格納
         diff.append(value)
 
-    return Series(diff)
+    return pd.Series(diff)
 
 # invert difference forecast --> 差分予測の反転？？？ --> 使途不明関数
 def inverse_difference(last_ob, value):
