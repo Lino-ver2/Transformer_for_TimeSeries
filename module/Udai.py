@@ -6,6 +6,7 @@ import matplotlib.pyplot as plt
 
 # TIME SERIES
 from pandas.plotting import autocorrelation_plot
+from statsmodels.tsa.stattools import adfuller, acf, pacf
 import statsmodels.tsa.api as smt
 import statsmodels.api as sm
 import scipy.stats as scs
