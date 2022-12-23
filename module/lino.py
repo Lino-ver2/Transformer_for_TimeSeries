@@ -2,18 +2,21 @@ from typing import Tuple
 
 import numpy as np
 import pandas as pd
+from sklearn.preprocessing import StandardScaler
 import torch
+from torch.utils.data import TensorDataset, DataLoader
 
 
-def time_series_dataset(data,
+def time_series_dataset(data: pd.DataFrame,
                         trg_column='item_cnt_day',
                         seq=7,
                         d_model=32,
                         dilation=1,
                         src_tgt_seq=(6, 2),
-                        batch_size=64):
+                        batch_size=64) -> DataLoader:
     data = getattr(_mode_of_freq(data), trg_column)
     x, y = _expand_and_split(data, seq)
+    x = StandardScaler().fit_transform(x)
     tded, label = _time_delay_embedding(x, y, d_model, dilation)
     src, tgt = _src_tgt_split(tded, *src_tgt_seq)
     dataset = _to_torch_dataset(src, tgt, label, batch_size)
@@ -86,9 +89,9 @@ def _src_tgt_split(tded: np.ndarray,
 
 
 def _to_torch_dataset(src: np.ndarray,
-                      tgt: np.ndarray,
-                      label: np.ndarray,
-                      batch_size: int) -> object:
+                     tgt: np.ndarray,
+                     label: np.ndarray,
+                     batch_size: int) -> DataLoader:
     """Pytorch用のデータセットへの変換
     引数:
         src: エンコーダ入力データ
@@ -99,6 +102,6 @@ def _to_torch_dataset(src: np.ndarray,
     label = label.reshape(-1, 1)[:len(src)]
     pack = (src, tgt, label)
     pack = [torch.from_numpy(i.astype(np.float32)).clone() for i in pack]
-    dataset = torch.utils.data.TensorDataset(*pack)
-    dataset = torch.utils.data.DataLoader(dataset, batch_size, shuffle=False)
+    dataset = TensorDataset(*pack)
+    dataset = DataLoader(dataset, batch_size, shuffle=False)
     return dataset
