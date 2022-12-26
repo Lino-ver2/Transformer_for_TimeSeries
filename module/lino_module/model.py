@@ -15,7 +15,7 @@ class TransformerModel(nn.Module):
                                                 )
         self.transformer_encoder = nn.TransformerEncoder(
                                                     encoder_layer,
-                                                    num_layers=6
+                                                    num_layers=4
                                                     )
 
         decoder_layer = nn.TransformerDecoderLayer(
@@ -25,7 +25,7 @@ class TransformerModel(nn.Module):
                                                 )
         self.transformer_decoder = nn.TransformerDecoder(
                                                 decoder_layer,
-                                                num_layers=6
+                                                num_layers=4
                                                 )
         self.linear = nn.Linear(d_model, 1)
 
