@@ -15,12 +15,13 @@ def time_series_dataset(data: pd.DataFrame,
                         src_tgt_seq=(6, 2),
                         batch_size=64) -> DataLoader:
     data = getattr(_mode_of_freq(data), trg_column)
+    data = StandardScaler().fit_transform(data.values.reshape(-1, 1))
+    data = data.reshape(-1)
     x, y = _expand_and_split(data, seq)
-    x = StandardScaler().fit_transform(x)
     tded, label = _time_delay_embedding(x, y, d_model, dilation)
     src, tgt = _src_tgt_split(tded, *src_tgt_seq)
-    dataset = _to_torch_dataset(src, tgt, label, batch_size)
-    return dataset
+    train, test = _to_torch_dataset(src, tgt, label, batch_size)
+    return train, test
 
 
 def _mode_of_freq(data: pd.DataFrame,
@@ -89,9 +90,10 @@ def _src_tgt_split(tded: np.ndarray,
 
 
 def _to_torch_dataset(src: np.ndarray,
-                     tgt: np.ndarray,
-                     label: np.ndarray,
-                     batch_size: int) -> DataLoader:
+                      tgt: np.ndarray,
+                      label: np.ndarray,
+                      batch_size: int,
+                      train_rate=0.9) -> DataLoader:
     """Pytorch用のデータセットへの変換
     引数:
         src: エンコーダ入力データ
@@ -101,7 +103,16 @@ def _to_torch_dataset(src: np.ndarray,
     """
     label = label.reshape(-1, 1)[:len(src)]
     pack = (src, tgt, label)
-    pack = [torch.from_numpy(i.astype(np.float32)).clone() for i in pack]
-    dataset = TensorDataset(*pack)
-    dataset = DataLoader(dataset, batch_size, shuffle=False)
-    return dataset
+    train_pack = [
+        torch.from_numpy(i.astype(np.float32)).clone()[:int(len(src) * train_rate)]
+        for i in pack
+        ]
+    test_pack = [
+        torch.from_numpy(i.astype(np.float32)).clone()[int(len(src) * train_rate):]
+        for i in pack
+        ]
+    train = TensorDataset(*train_pack)
+    train = DataLoader(train, batch_size, shuffle=False)
+    test = TensorDataset(*test_pack)
+    test = DataLoader(test, batch_size=1, shuffle=False)
+    return train, test
