@@ -127,11 +127,13 @@ def training(model: object,
 
         validation_loss.append(validation_epoch_loss)
         train_loss.append(train_epoch_loss)
-        
+
         if epoch % verbose == 0:
             print(f' epoch_{epoch} '.center(center))
-            print('train_loss: ', torch.mean(torch.tensor(train_epoch_loss)).item(),
-                  '| validation_loss: ', torch.mean(torch.tensor(validation_epoch_loss)).item(),
+            train_mean = torch.mean(torch.tensor(train_epoch_loss)).item()
+            test_mean = torch.mean(torch.tensor(validation_epoch_loss)).item()
+            print('train_loss: ', round(train_mean, 4),
+                  '| validation_loss: ', round(test_mean, 4),
                   '| time: ', round(time.time() - epoch_point, 3))
 
     print(' complete!! '.center(center, '-'))
