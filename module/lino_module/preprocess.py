@@ -7,6 +7,20 @@ import torch
 from torch.utils.data import TensorDataset, DataLoader
 
 
+# GPU もしくは CPU の選択
+def select_device():
+    if torch.cuda.is_available():
+        device = torch.device('cuda')
+        print('cuda is selected as device!')
+    elif torch.backends.mps.is_available():
+        device = torch.device('mps')
+        print('mps is selected as device!')
+    else:
+        device = torch.device('cpu')
+    return device
+
+
+# データセットの main関数
 def time_series_dataset(data: pd.DataFrame,
                         trg_column='item_cnt_day',
                         seq=7,
@@ -29,7 +43,7 @@ def _mode_of_freq(data: pd.DataFrame,
                   freq='D',
                   mode='sum'
                   ) -> pd.DataFrame:
-    """データを基本統計量で統合する
+    """時系列データを基本統計量で統合する
     引数:
         data: 対象を含むオリジナルデータ
         key: 時間軸のカラム名
@@ -74,7 +88,7 @@ def _time_delay_embedding(x: np.ndarray,
     y = y[span - dilation:]
     return np.array(tded), np.array(y)
 
-## time_delay_embeddingの挙動確認用
+## time_delay_embeddingの挙動確認用（メモ）
 # i = 0
 # print(expanded[i: i + span: dilation, :][-1,   -2:])
 # print(tded[i][-1, -1], y_[i])

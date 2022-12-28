@@ -1,22 +1,23 @@
 import math
-from typing import List, Dict, Tuple
 
 import torch
 import torch.nn as nn
 from torch import Tensor
 
 
-def _generate_mask(tgt_seq: int) -> Tensor:
-    inf_mask = torch.ones(tgt_seq, tgt_seq) * float('-inf')
-    tgt_mask = torch.triu(inf_mask, diagonal=1)
-    return tgt_mask
-
 class TransformerModel(nn.Module):
+    """Trasnsormer for Time Series
+        参考論文: https://arxiv.org/abs/2001.08317
+    """
     def __init__(self, d_model: int, nhead: int):
         super(TransformerModel, self).__init__()
+
+        self.positional = PositionalEncoding(d_model)
+
         encoder_layer = nn.TransformerEncoderLayer(
                                                 d_model,
                                                 nhead,
+                                                dropout=0.2,
                                                 batch_first=True
                                                 )
         self.transformer_encoder = nn.TransformerEncoder(
@@ -27,6 +28,7 @@ class TransformerModel(nn.Module):
         decoder_layer = nn.TransformerDecoderLayer(
                                                 d_model,
                                                 nhead=8,
+                                                dropout=0.2,
                                                 batch_first=True
                                                 )
         self.transformer_decoder = nn.TransformerDecoder(
@@ -35,26 +37,33 @@ class TransformerModel(nn.Module):
                                                 )
         self.linear = nn.Linear(d_model, 1)
 
-        self.positional = PositionalEncoding(d_model, dropout=0.1, max_len=5000)
-
     def forward(self, src: Tensor, tgt: Tensor) -> Tensor:
-        # A-look ahead mask の作成
+        # Decoder用のtgt_maskを作成
         _, tgt_seq, _ = tgt.shape
-        tgt_mask = _generate_mask(tgt_seq)
+        tgt_mask = _generate_mask(tgt_seq)   # A-look ahead mask
 
+        # Positional Encoding
         src = self.positional(src)
+        # Encoder
         memory = self.transformer_encoder(src)
+        # Decoder
         output = self.transformer_decoder(tgt, memory, tgt_mask)
+        # 線形変で出力の形状へ
         pred = self.linear(output)
         return pred
 
 
-class PositionalEncoding(nn.Module):
-    """Positional Encoding."""
+def _generate_mask(tgt_seq: int) -> Tensor:
+    """デコーダ入力用の Self Attention用のマスクを作成"""
+    inf_mask = torch.ones(tgt_seq, tgt_seq) * float('-inf')
+    tgt_mask = torch.triu(inf_mask, diagonal=1)
+    return tgt_mask
 
-    def __init__(self, d_model: int, dropout=0.1, max_len=5000):
+
+class PositionalEncoding(nn.Module):
+    """PositionalEnoder"""
+    def __init__(self, d_model: int, max_len=5000):
         super(PositionalEncoding, self).__init__()
-        self.dropout = nn.Dropout(p=dropout)
 
         pe = torch.zeros(max_len, d_model)
         position = torch.arange(0, max_len, dtype=torch.float).unsqueeze(1)
@@ -67,7 +76,5 @@ class PositionalEncoding(nn.Module):
         self.register_buffer("pe", pe)
 
     def forward(self, x: Tensor) -> Tensor:
-        """PositionalEncodingを適用."""
-
         x = x + self.pe[: x.size(0), :]
-        return self.dropout(x)
+        return x
