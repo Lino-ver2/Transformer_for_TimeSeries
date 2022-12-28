@@ -1,8 +1,15 @@
 import math
+from typing import List, Dict, Tuple
 
 import torch
 import torch.nn as nn
+from torch import Tensor
 
+
+def _generate_mask(tgt_seq: int) -> Tensor:
+    inf_mask = torch.ones(tgt_seq, tgt_seq) * float('-inf')
+    tgt_mask = torch.triu(inf_mask, diagonal=1)
+    return tgt_mask
 
 class TransformerModel(nn.Module):
     def __init__(self, d_model: int, nhead: int):
@@ -10,7 +17,6 @@ class TransformerModel(nn.Module):
         encoder_layer = nn.TransformerEncoderLayer(
                                                 d_model,
                                                 nhead,
-                                                dropout=0.2,
                                                 batch_first=True
                                                 )
         self.transformer_encoder = nn.TransformerEncoder(
@@ -21,7 +27,6 @@ class TransformerModel(nn.Module):
         decoder_layer = nn.TransformerDecoderLayer(
                                                 d_model,
                                                 nhead=8,
-                                                dropout=0.2,
                                                 batch_first=True
                                                 )
         self.transformer_decoder = nn.TransformerDecoder(
@@ -30,12 +35,16 @@ class TransformerModel(nn.Module):
                                                 )
         self.linear = nn.Linear(d_model, 1)
 
-        self.positional = PositionalEncoding(d_model, dropout=0.2, max_len=5000)
+        self.positional = PositionalEncoding(d_model, dropout=0.1, max_len=5000)
 
-    def forward(self, src, tgt):
+    def forward(self, src: Tensor, tgt: Tensor) -> Tensor:
+        # A-look ahead mask の作成
+        _, tgt_seq, _ = tgt.shape
+        tgt_mask = _generate_mask(tgt_seq)
+
         src = self.positional(src)
         memory = self.transformer_encoder(src)
-        output = self.transformer_decoder(tgt, memory)
+        output = self.transformer_decoder(tgt, memory, tgt_mask)
         pred = self.linear(output)
         return pred
 
@@ -43,7 +52,7 @@ class TransformerModel(nn.Module):
 class PositionalEncoding(nn.Module):
     """Positional Encoding."""
 
-    def __init__(self, d_model, dropout=0.1, max_len=5000):
+    def __init__(self, d_model: int, dropout=0.1, max_len=5000):
         super(PositionalEncoding, self).__init__()
         self.dropout = nn.Dropout(p=dropout)
 
@@ -57,7 +66,7 @@ class PositionalEncoding(nn.Module):
         pe = pe.unsqueeze(0).transpose(0, 1)
         self.register_buffer("pe", pe)
 
-    def forward(self, x):
+    def forward(self, x: Tensor) -> Tensor:
         """PositionalEncodingを適用."""
 
         x = x + self.pe[: x.size(0), :]
