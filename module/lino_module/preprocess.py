@@ -79,16 +79,16 @@ def _time_delay_embedding(x: np.ndarray,
         x: 訓練データ
         y: 正解データ
         d_model: エンべディング次元数
-        dilation: エンべディングの膨張率 
+        dilation: エンべディングの膨張率
     """
     endpoint = x.shape[0] - d_model * dilation
     span = d_model * dilation
 
-    tded = [x[i: i + span: dilation, :].T for i in range(endpoint)] 
+    tded = [x[i: i + span: dilation, :].T for i in range(endpoint)]
     y = y[span - dilation:]
     return np.array(tded), np.array(y)
 
-## time_delay_embeddingの挙動確認用（メモ）
+# # time_delay_embeddingの挙動確認用（メモ）
 # i = 0
 # print(expanded[i: i + span: dilation, :][-1,   -2:])
 # print(tded[i][-1, -1], y_[i])

@@ -1,8 +1,11 @@
+import time
 import math
+from typing import Tuple
 
 import torch
 import torch.nn as nn
 from torch import Tensor
+from torch.utils.data import DataLoader
 
 
 class TransformerModel(nn.Module):
@@ -78,3 +81,59 @@ class PositionalEncoding(nn.Module):
     def forward(self, x: Tensor) -> Tensor:
         x = x + self.pe[: x.size(0), :]
         return x
+
+
+def training(model: object,
+             dataset: DataLoader,
+             device: torch.device,
+             criterion: object,
+             optimizer: object,
+             epochs: int,
+             verbose=10,
+             center=80) -> Tuple[object, Tensor, Tensor]:
+    train_loss = []
+    validation_loss = []
+    print(' start '.center(center, '-'))
+    start_point = time.time()
+    for epoch in range(epochs):
+        epoch_point = time.time()
+        train_epoch_loss = []
+        validation_epoch_loss = []
+
+        cache = None
+        for i, pack in enumerate(dataset):
+            src, tgt, y = [content.to(device) for content in pack]
+            # モデル訓練
+            if i == 0:
+                pass
+            else:
+                # キャッシュから１バッチ前のデータで訓練
+                cached_src, cached_tgt, cached_y = cache
+                model.train()
+                optimizer.zero_grad()
+                output = model(cached_src, cached_tgt)
+                loss = criterion(output[:, 1, :], cached_y)
+                train_epoch_loss.append(loss.item())
+                # 勾配計算
+                loss.backward()
+                optimizer.step()
+            # モデル評価
+            model.eval()
+            output = model(src, tgt)
+            loss = criterion(output[:, 1, :], y)
+            validation_epoch_loss.append(loss.item())
+            # データをキャッシュに保存して次回の訓練データにする
+            cache = (src, tgt, y)
+
+        validation_loss.append(validation_epoch_loss)
+        train_loss.append(train_epoch_loss)
+        
+        if epoch % verbose == 0:
+            print(f' epoch_{epoch} '.center(center))
+            print('train_loss: ', torch.mean(torch.tensor(train_epoch_loss)).item(),
+                  '| validation_loss: ', torch.mean(torch.tensor(validation_epoch_loss)).item(),
+                  '| time: ', round(time.time() - epoch_point, 3))
+
+    print(' complete!! '.center(center, '-'))
+    print(f'Execution_time: {round(time.time() - start_point, 3)}')
+    return model, torch.tensor(train_loss), torch.tensor(validation_loss)
