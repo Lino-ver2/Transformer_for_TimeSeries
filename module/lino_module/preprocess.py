@@ -13,7 +13,7 @@ def time_series_dataset(data: pd.DataFrame,
                         d_model=32,
                         dilation=1,
                         src_tgt_seq=(6, 2),
-                        batch_size=64) -> DataLoader:
+                        batch_size=64) -> Tuple[DataLoader]:
     data = getattr(_mode_of_freq(data), trg_column)
     data = StandardScaler().fit_transform(data.values.reshape(-1, 1))
     data = data.reshape(-1)

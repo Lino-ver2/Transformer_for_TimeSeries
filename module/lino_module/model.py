@@ -2,7 +2,6 @@ import math
 
 import torch
 import torch.nn as nn
-from torch.optim import Adam
 
 
 class TransformerModel(nn.Module):
@@ -11,6 +10,7 @@ class TransformerModel(nn.Module):
         encoder_layer = nn.TransformerEncoderLayer(
                                                 d_model,
                                                 nhead,
+                                                dropout=0.2,
                                                 batch_first=True
                                                 )
         self.transformer_encoder = nn.TransformerEncoder(
@@ -21,6 +21,7 @@ class TransformerModel(nn.Module):
         decoder_layer = nn.TransformerDecoderLayer(
                                                 d_model,
                                                 nhead=8,
+                                                dropout=0.2,
                                                 batch_first=True
                                                 )
         self.transformer_decoder = nn.TransformerDecoder(
@@ -29,7 +30,7 @@ class TransformerModel(nn.Module):
                                                 )
         self.linear = nn.Linear(d_model, 1)
 
-        self.positional = PositionalEncoding(d_model, dropout=0.1, max_len=5000)
+        self.positional = PositionalEncoding(d_model, dropout=0.2, max_len=5000)
 
     def forward(self, src, tgt):
         src = self.positional(src)
