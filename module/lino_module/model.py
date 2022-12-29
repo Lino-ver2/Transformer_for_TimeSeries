@@ -42,10 +42,7 @@ class TransformerModel(nn.Module):
 
     def forward(self, src: Tensor, tgt: Tensor) -> Tensor:
         # Decoder用のtgt_maskを作成
-        if tgt.dim() == 2:
-            tgt_seq, _ = tgt.shape
-        if tgt.dim() == 3:
-            _, tgt_seq, _ = tgt.shape
+        _, tgt_seq, _ = tgt.shape
         tgt_mask = _generate_mask(tgt_seq)   # A-look ahead mask
 
         # Positional Encoding
