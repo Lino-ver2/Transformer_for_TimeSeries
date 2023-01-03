@@ -1,14 +1,18 @@
-from typing import Tuple
-
 import numpy as np
 import pandas as pd
 from sklearn.preprocessing import StandardScaler
 import torch
-from torch.utils.data import TensorDataset, DataLoader
+from torch.utils.data import TensorDataset
+
+from typing import Tuple, Optional
+from pandas import DataFrame, Series, DatetimeIndex
+from numpy import ndarray
+from torch.utils.data import DataLoader
 
 
-# GPU もしくは CPU の選択
+# 「mps」ではTransfomerのattnでエラーが出る
 def select_device():
+    """GPU もしくは CPU の選択"""
     if torch.cuda.is_available():
         device = torch.device('cuda')
         print('cuda is selected as device!')
@@ -17,17 +21,18 @@ def select_device():
         print('mps is selected as device!')
     else:
         device = torch.device('cpu')
+        print('cpu....f')
     return device
 
 
-# データセットの main関数
-def time_series_dataset(data: pd.DataFrame,
-                        trg_column='item_cnt_day',
-                        seq=7,
-                        d_model=32,
-                        dilation=1,
-                        src_tgt_seq=(6, 2),
-                        batch_size=64) -> Tuple[DataLoader]:
+def time_series_dataset(data: DataFrame,
+                        seq: int,
+                        d_model: int,
+                        dilation: int,
+                        src_tgt_seq: Tuple[int],
+                        batch_size: int,
+                        trg_column='item_cnt_day') -> Tuple[DataLoader]:
+    """TDEデータセットのメイン関数"""
     data = getattr(_mode_of_freq(data), trg_column)
     data = StandardScaler().fit_transform(data.values.reshape(-1, 1))
     data = data.reshape(-1)
@@ -38,11 +43,36 @@ def time_series_dataset(data: pd.DataFrame,
     return train, test
 
 
-def _mode_of_freq(data: pd.DataFrame,
+def weekly_monthly_tde_dataset(data: DataFrame,
+                               seq: int,
+                               d_model: int,
+                               dilation: int,
+                               src_tgt_seq: Tuple[int],
+                               batch_size: int,
+                               trg_column='item_cnt_day') -> Tuple[DataLoader]:
+    """TDEに対応した曜日ラベルと月ラベル付与したデータセットのメイン関数"""
+    data = getattr(_mode_of_freq(data), trg_column)
+    index = data.index
+    data = StandardScaler().fit_transform(data.values.reshape(-1, 1))
+    data = data.reshape(-1)
+    x, y = _expand_and_split(data, seq)
+    tded, label = _delay_embeddings(
+                                x, y,
+                                index,
+                                d_model,
+                                dilation,
+                                seq,
+                                weekly=True, monthly=True)
+    src, tgt = _src_tgt_split(tded, *src_tgt_seq)
+    train, test = _to_torch_dataset(src, tgt, label, batch_size)
+    return train, test
+
+
+def _mode_of_freq(data: DataFrame,
                   key='date',
                   freq='D',
                   mode='sum'
-                  ) -> pd.DataFrame:
+                  ) -> DataFrame:
     """時系列データを基本統計量で統合する
     引数:
         data: 対象を含むオリジナルデータ
@@ -57,7 +87,7 @@ def _mode_of_freq(data: pd.DataFrame,
     return mode_of_key()
 
 
-def _expand_and_split(ds: pd.Series, seq: int) -> Tuple[np.ndarray]:
+def _expand_and_split(ds: Series, seq: int) -> Tuple[ndarray]:
     """2次元にd_modelずらしたデータと正解データを作成する
     引数:
         ds: 単変量時系列データ
@@ -70,42 +100,71 @@ def _expand_and_split(ds: pd.Series, seq: int) -> Tuple[np.ndarray]:
     return x, y  # ,expanded  # 挙動の確認用
 
 
-def _time_delay_embedding(x: np.ndarray,
-                          y: np.ndarray,
-                          d_model=32,
-                          dilation=0) -> Tuple[np.ndarray]:
+def _time_delay_embedding(x: ndarray,
+                          y: Optional[ndarray],
+                          d_model: int,
+                          dilation: int) -> Tuple[ndarray]:
     """Time Delay Embedding
     引数:
         x: 訓練データ
         y: 正解データ
         d_model: エンべディング次元数
-        dilation: エンべディングの膨張率
+        dilation: エンべディングの間隔
     """
     endpoint = x.shape[0] - d_model * (dilation + 1)
     span = d_model * (dilation + 1)
 
     tded = [x[i: i + span: (dilation + 1), :].T for i in range(endpoint)]
-    y = y[span - (dilation + 1):]
-    return np.array(tded), np.array(y)
-
-# # time_delay_embeddingの挙動確認用（メモ）
-# i = 0
-# print(expanded[i: i + span: dilation, :][-1,   -2:])
-# print(tded[i][-1, -1], y_[i])
+    if y is not None:
+        y = y[span - (dilation + 1):]
+        return np.array(tded), np.array(y)
+    return np.array(tded)
 
 
-def _src_tgt_split(tded: np.ndarray,
+def _src_tgt_split(tded: ndarray,
                    src_seq: int,
-                   tgt_seq: int) -> Tuple[np.ndarray]:
+                   tgt_seq: int) -> Tuple[ndarray]:
     """エンコーダ入力とデコーダ入力への分割"""
     src = tded[:, :src_seq]
     tgt = tded[:, -tgt_seq:]
     return src, tgt
 
 
-def _to_torch_dataset(src: np.ndarray,
-                      tgt: np.ndarray,
-                      label: np.ndarray,
+def _delay_embeddings(x: ndarray,
+                      y: ndarray,
+                      index: DatetimeIndex,
+                      d_model: int,
+                      dilation: int,
+                      seq: int,
+                      weekly=True,
+                      monthly=True):
+    """TDEに対応した曜日、月時ラベルをconcatする"""
+    # Time Delay Embedding
+    tded, label = _time_delay_embedding(x, y, d_model, dilation)
+
+    # 曜日ラベル
+    if weekly:
+        # positional encodingのために0-1でスケーリング
+        weekly_num = list(np.linspace(0, 1, 8))
+        # 曜日ラベルをデータ数分ループさせたシーケンス
+        weekly_label = weekly_num * (len(index) // 8) + weekly_num[:len(index) % 8]
+        week, _ = _expand_and_split(weekly_label, seq)
+        tded_week = _time_delay_embedding(week, None, d_model, dilation)
+        tded = np.concatenate((tded, tded_week), axis=2)
+
+    # 月ラベル
+    if monthly:
+        # positional encodingのために0-1でスケーリング
+        scaled_index = (index.month - 1) / 11
+        month, _ = _expand_and_split(scaled_index, seq)
+        tded_month = _time_delay_embedding(month, None, d_model, dilation)
+        tded = np.concatenate((tded, tded_month), axis=2)
+    return tded, label
+
+
+def _to_torch_dataset(src: ndarray,
+                      tgt: ndarray,
+                      label: ndarray,
                       batch_size: int,
                       train_rate=0.9) -> DataLoader:
     """Pytorch用のデータセットへの変換
