@@ -71,7 +71,7 @@ def _tde_for_inference(
     for_array = []
     for i in range(d_model):
         if i != 0:
-            for_array.append(ds[-seq - i * dilation: -i * dilation])
+            for_array.append(ds[-seq - i * (dilation + 1): -i * (dilation + 1)])
         else:
             for_array.append(ds[-seq:])
     time_delay_embedded = np.array([content for content in reversed(for_array)])

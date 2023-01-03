@@ -73,7 +73,7 @@ def _expand_and_split(ds: pd.Series, seq: int) -> Tuple[np.ndarray]:
 def _time_delay_embedding(x: np.ndarray,
                           y: np.ndarray,
                           d_model=32,
-                          dilation=1) -> Tuple[np.ndarray]:
+                          dilation=0) -> Tuple[np.ndarray]:
     """Time Delay Embedding
     引数:
         x: 訓練データ
@@ -81,11 +81,11 @@ def _time_delay_embedding(x: np.ndarray,
         d_model: エンべディング次元数
         dilation: エンべディングの膨張率
     """
-    endpoint = x.shape[0] - d_model * dilation
-    span = d_model * dilation
+    endpoint = x.shape[0] - d_model * (dilation + 1)
+    span = d_model * (dilation + 1)
 
-    tded = [x[i: i + span: dilation, :].T for i in range(endpoint)]
-    y = y[span - dilation:]
+    tded = [x[i: i + span: (dilation + 1), :].T for i in range(endpoint)]
+    y = y[span - (dilation + 1):]
     return np.array(tded), np.array(y)
 
 # # time_delay_embeddingの挙動確認用（メモ）
@@ -118,11 +118,11 @@ def _to_torch_dataset(src: np.ndarray,
     label = label.reshape(-1, 1)[:len(src)]
     pack = (src, tgt, label)
     train_pack = [
-        torch.from_numpy(i.astype(np.float32)).clone()[:int(len(src) * train_rate)]
+        torch.from_numpy(i.astype(np.float32))[:int(len(src) * train_rate)]
         for i in pack
         ]
     test_pack = [
-        torch.from_numpy(i.astype(np.float32)).clone()[int(len(src) * train_rate):]
+        torch.from_numpy(i.astype(np.float32))[int(len(src) * train_rate):]
         for i in pack
         ]
     train = TensorDataset(*train_pack)

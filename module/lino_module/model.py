@@ -30,7 +30,7 @@ class TransformerModel(nn.Module):
 
         decoder_layer = nn.TransformerDecoderLayer(
                                                 d_model,
-                                                nhead=8,
+                                                nhead,
                                                 dropout=0.2,
                                                 batch_first=True
                                                 )
