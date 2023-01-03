@@ -145,9 +145,9 @@ def _delay_embeddings(x: ndarray,
     # 曜日ラベル
     if weekly:
         # positional encodingのために0-1でスケーリング
-        weekly_num = list(np.linspace(0, 1, 8))
+        weekly_num = list(np.linspace(0, 1, 7))
         # 曜日ラベルをデータ数分ループさせたシーケンス
-        weekly_label = weekly_num * (len(index) // 8) + weekly_num[:len(index) % 8]
+        weekly_label = weekly_num * (len(index) // 7) + weekly_num[:len(index) % 7]
         week, _ = _expand_and_split(weekly_label, seq)
         tded_week = _time_delay_embedding(week, None, d_model, dilation)
         tded = np.concatenate((tded, tded_week), axis=2)
