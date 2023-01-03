@@ -76,10 +76,20 @@ class PositionalEncoding(nn.Module):
         pe[:, 0::2] = torch.sin(position * div_term)
         pe[:, 1::2] = torch.cos(position * div_term)
         pe = pe.unsqueeze(0).transpose(0, 1)
+        self.register_buffer("pe", pe)
 
     def forward(self, x: Tensor) -> Tensor:
         x = x + self.pe[: x.size(0), :]
         return x
+
+
+class RMSELoss(nn.Module):
+    def __init__(self):
+        super().__init__()
+        self.mse = nn.MSELoss()
+
+    def forward(self, y, t):
+        return torch.sqrt(self.mse(y, t))
 
 
 def training(model: object,
