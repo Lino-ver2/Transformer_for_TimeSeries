@@ -49,6 +49,8 @@ def weekly_monthly_tde_dataset(data: DataFrame,
                                dilation: int,
                                src_tgt_seq: Tuple[int],
                                batch_size: int,
+                               weekly=True,
+                               monthly=True,
                                trg_column='item_cnt_day') -> Tuple[DataLoader]:
     """TDEに対応した曜日ラベルと月ラベル付与したデータセットのメイン関数"""
     data = getattr(_mode_of_freq(data), trg_column)
@@ -62,7 +64,7 @@ def weekly_monthly_tde_dataset(data: DataFrame,
                                 d_model,
                                 dilation,
                                 seq,
-                                weekly=True, monthly=True)
+                                weekly, monthly)
     src, tgt = _src_tgt_split(tded, *src_tgt_seq)
     train, test = _to_torch_dataset(src, tgt, label, batch_size)
     return train, test
@@ -97,7 +99,7 @@ def _expand_and_split(ds: Series, seq: int) -> Tuple[ndarray]:
     expanded = np.stack([ds[i: i + seq + 1] for i in range(0, endpoint)])
     x = expanded[:, :-1]
     y = expanded[:, -1]
-    return x, y  # ,expanded  # 挙動の確認用
+    return x, y
 
 
 def _time_delay_embedding(x: ndarray,
@@ -121,23 +123,14 @@ def _time_delay_embedding(x: ndarray,
     return np.array(tded)
 
 
-def _src_tgt_split(tded: ndarray,
-                   src_seq: int,
-                   tgt_seq: int) -> Tuple[ndarray]:
-    """エンコーダ入力とデコーダ入力への分割"""
-    src = tded[:, :src_seq]
-    tgt = tded[:, -tgt_seq:]
-    return src, tgt
-
-
 def _delay_embeddings(x: ndarray,
                       y: ndarray,
                       index: DatetimeIndex,
                       d_model: int,
                       dilation: int,
                       seq: int,
-                      weekly=True,
-                      monthly=True):
+                      weekly: bool,
+                      monthly: bool):
     """TDEに対応した曜日、月時ラベルをconcatする"""
     # Time Delay Embedding
     tded, label = _time_delay_embedding(x, y, d_model, dilation)
@@ -160,6 +153,15 @@ def _delay_embeddings(x: ndarray,
         tded_month = _time_delay_embedding(month, None, d_model, dilation)
         tded = np.concatenate((tded, tded_month), axis=2)
     return tded, label
+
+
+def _src_tgt_split(tded: ndarray,
+                   src_seq: int,
+                   tgt_seq: int) -> Tuple[ndarray]:
+    """エンコーダ入力とデコーダ入力への分割"""
+    src = tded[:, :src_seq]
+    tgt = tded[:, -tgt_seq:]
+    return src, tgt
 
 
 def _to_torch_dataset(src: ndarray,

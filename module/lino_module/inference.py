@@ -18,7 +18,7 @@ def recurrent_inference(
                     seq: int,
                     d_model: int,
                     dilation: int,
-                    src_tgt_seq: Tuple[int, int],
+                    src_tgt_seq: Tuple[int],
                     ) -> pd.Series:
     """再帰的に推論を行う
     引数:
@@ -41,9 +41,9 @@ def recurrent_inference(
     step_num = 1  # ハードコードしてるけど後日改修
     inference_seq = np.array([])
     for _ in range(rec_freq):
-        embed = _tde_for_inference(sum_freq, seq, d_model, dilation)
+        embed = tde_for_inference(sum_freq, seq, d_model, dilation)
         src, tgt = _src_tgt_split(embed, src_seq, tgt_seq)
-        output = _inference(model, src, tgt).reshape(-1)
+        output = inference(model, src, tgt).reshape(-1)
         pred = output[-step_num:]
         sum_freq = np.append(sum_freq, pred.reshape(-1))
         inversed = scs.inverse_transform(pred.reshape(-1, 1)).reshape(-1)
@@ -54,7 +54,7 @@ def recurrent_inference(
     return pd.Series(inference_seq, index)
 
 
-def _inference(model:    object, src: Tensor, tgt: Tensor) -> Tensor:
+def inference(model: object, src: Tensor, tgt: Tensor) -> Tensor:
     src = torch.from_numpy(src.astype(np.float32)).T.unsqueeze(0)
     tgt = torch.from_numpy(tgt.astype(np.float32)).T.unsqueeze(0)
     model.eval()
@@ -62,7 +62,7 @@ def _inference(model:    object, src: Tensor, tgt: Tensor) -> Tensor:
     return output
 
 
-def _tde_for_inference(
+def tde_for_inference(
                     ds: pd.Series,
                     seq: int,
                     d_model: int,

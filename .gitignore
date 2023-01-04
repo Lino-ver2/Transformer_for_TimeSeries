@@ -3,5 +3,6 @@ __pycache__/
 .ipynb_checkpoints/
 memos/
 models/
+models_mw/
 .DS_Store
 memo.ipynb
