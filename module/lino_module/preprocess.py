@@ -33,13 +33,13 @@ def time_series_dataset(data: DataFrame,
                         batch_size: int,
                         trg_column='item_cnt_day') -> Tuple[DataLoader]:
     """TDEデータセットのメイン関数"""
-    data = getattr(_mode_of_freq(data), trg_column)
+    data = getattr(mode_of_freq(data), trg_column)
     data = StandardScaler().fit_transform(data.values.reshape(-1, 1))
     data = data.reshape(-1)
-    x, y = _expand_and_split(data, seq)
-    tded, label = _time_delay_embedding(x, y, d_model, dilation)
-    src, tgt = _src_tgt_split(tded, *src_tgt_seq)
-    train, test = _to_torch_dataset(src, tgt, label, batch_size)
+    x, y = expand_and_split(data, seq)
+    tded, label = time_delay_embedding(x, y, d_model, dilation)
+    src, tgt = src_tgt_split(tded, *src_tgt_seq)
+    train, test = to_torch_dataset(src, tgt, label, batch_size)
     return train, test
 
 
@@ -53,28 +53,28 @@ def weekly_monthly_tde_dataset(data: DataFrame,
                                monthly=True,
                                trg_column='item_cnt_day') -> Tuple[DataLoader]:
     """TDEに対応した曜日ラベルと月ラベル付与したデータセットのメイン関数"""
-    data = getattr(_mode_of_freq(data), trg_column)
+    data = getattr(mode_of_freq(data), trg_column)
     index = data.index
     data = StandardScaler().fit_transform(data.values.reshape(-1, 1))
     data = data.reshape(-1)
-    x, y = _expand_and_split(data, seq)
-    tded, label = _delay_embeddings(
+    x, y = expand_and_split(data, seq)
+    tded, label = delay_embeddings(
                                 x, y,
                                 index,
                                 d_model,
                                 dilation,
                                 seq,
                                 weekly, monthly)
-    src, tgt = _src_tgt_split(tded, *src_tgt_seq)
-    train, test = _to_torch_dataset(src, tgt, label, batch_size)
+    src, tgt = src_tgt_split(tded, *src_tgt_seq)
+    train, test = to_torch_dataset(src, tgt, label, batch_size)
     return train, test
 
 
-def _mode_of_freq(data: DataFrame,
-                  key='date',
-                  freq='D',
-                  mode='sum'
-                  ) -> DataFrame:
+def mode_of_freq(data: DataFrame,
+                 key='date',
+                 freq='D',
+                 mode='sum'
+                 ) -> DataFrame:
     """時系列データを基本統計量で統合する
     引数:
         data: 対象を含むオリジナルデータ
@@ -89,7 +89,7 @@ def _mode_of_freq(data: DataFrame,
     return mode_of_key()
 
 
-def _expand_and_split(ds: Series, seq: int) -> Tuple[ndarray]:
+def expand_and_split(ds: Series, seq: int) -> Tuple[ndarray]:
     """2次元にd_modelずらしたデータと正解データを作成する
     引数:
         ds: 単変量時系列データ
@@ -102,10 +102,11 @@ def _expand_and_split(ds: Series, seq: int) -> Tuple[ndarray]:
     return x, y
 
 
-def _time_delay_embedding(x: ndarray,
-                          y: Optional[ndarray],
-                          d_model: int,
-                          dilation: int) -> Tuple[ndarray]:
+def time_delay_embedding(x: ndarray,
+                         y: Optional[ndarray],
+                         d_model: int,
+                         dilation: int
+                         ) -> Tuple[ndarray]:
     """Time Delay Embedding
     引数:
         x: 訓練データ
@@ -123,52 +124,52 @@ def _time_delay_embedding(x: ndarray,
     return np.array(tded)
 
 
-def _delay_embeddings(x: ndarray,
-                      y: ndarray,
-                      index: DatetimeIndex,
-                      d_model: int,
-                      dilation: int,
-                      seq: int,
-                      weekly: bool,
-                      monthly: bool):
+def delay_embeddings(x: ndarray,
+                     y: ndarray,
+                     index: DatetimeIndex,
+                     d_model: int,
+                     dilation: int,
+                     seq: int,
+                     weekly: bool,
+                     monthly: bool):
     """TDEに対応した曜日、月時ラベルをconcatする"""
     # Time Delay Embedding
-    tded, label = _time_delay_embedding(x, y, d_model, dilation)
+    tded, label = time_delay_embedding(x, y, d_model, dilation)
 
     # 曜日ラベル
     if weekly:
         # positional encodingのために0-1でスケーリング
-        weekly_num = list(np.linspace(0, 1, 7))
-        # 曜日ラベルをデータ数分ループさせたシーケンス
-        weekly_label = weekly_num * (len(index) // 7) + weekly_num[:len(index) % 7]
-        week, _ = _expand_and_split(weekly_label, seq)
-        tded_week = _time_delay_embedding(week, None, d_model, dilation)
+        scaled_weekday = index.weekday / 6
+        week, _ = expand_and_split(scaled_weekday, seq)
+        tded_week = time_delay_embedding(week, None, d_model, dilation)
         tded = np.concatenate((tded, tded_week), axis=2)
 
     # 月ラベル
     if monthly:
         # positional encodingのために0-1でスケーリング
-        scaled_index = (index.month - 1) / 11
-        month, _ = _expand_and_split(scaled_index, seq)
-        tded_month = _time_delay_embedding(month, None, d_model, dilation)
+        scaled_month = (index.month - 1) / 11
+        month, _ = expand_and_split(scaled_month, seq)
+        tded_month = time_delay_embedding(month, None, d_model, dilation)
         tded = np.concatenate((tded, tded_month), axis=2)
     return tded, label
 
 
-def _src_tgt_split(tded: ndarray,
-                   src_seq: int,
-                   tgt_seq: int) -> Tuple[ndarray]:
+def src_tgt_split(tded: ndarray,
+                  src_seq: int,
+                  tgt_seq: int
+                  ) -> Tuple[ndarray]:
     """エンコーダ入力とデコーダ入力への分割"""
     src = tded[:, :src_seq]
     tgt = tded[:, -tgt_seq:]
     return src, tgt
 
 
-def _to_torch_dataset(src: ndarray,
-                      tgt: ndarray,
-                      label: ndarray,
-                      batch_size: int,
-                      train_rate=0.9) -> DataLoader:
+def to_torch_dataset(src: ndarray,
+                     tgt: ndarray,
+                     label: ndarray,
+                     batch_size: int,
+                     train_rate=0.9
+                     ) -> DataLoader:
     """Pytorch用のデータセットへの変換
     引数:
         src: エンコーダ入力データ

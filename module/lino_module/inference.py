@@ -54,7 +54,7 @@ def recurrent_inference(
     return pd.Series(inference_seq, index)
 
 
-def inference(model: object, src: Tensor, tgt: Tensor) -> Tensor:
+def inference(model: object, src: ndarray, tgt: ndarray) -> Tensor:
     src = torch.from_numpy(src.astype(np.float32)).T.unsqueeze(0)
     tgt = torch.from_numpy(tgt.astype(np.float32)).T.unsqueeze(0)
     model.eval()
