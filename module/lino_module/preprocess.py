@@ -25,15 +25,14 @@ def select_device():
     return device
 
 
-def time_series_dataset(data: DataFrame,
-                        seq: int,
-                        d_model: int,
-                        dilation: int,
-                        src_tgt_seq: Tuple[int],
-                        batch_size: int,
-                        trg_column='item_cnt_day') -> Tuple[DataLoader]:
+def tde_dataset(data: Series,
+                seq: int,
+                d_model: int,
+                dilation: int,
+                src_tgt_seq: Tuple[int],
+                batch_size: int,
+                ) -> Tuple[DataLoader]:
     """TDEデータセットのメイン関数"""
-    data = getattr(mode_of_freq(data), trg_column)
     data = StandardScaler().fit_transform(data.values.reshape(-1, 1))
     data = data.reshape(-1)
     x, y = expand_and_split(data, seq)
@@ -43,17 +42,16 @@ def time_series_dataset(data: DataFrame,
     return train, test
 
 
-def weekly_monthly_tde_dataset(data: DataFrame,
-                               seq: int,
-                               d_model: int,
-                               dilation: int,
-                               src_tgt_seq: Tuple[int],
-                               batch_size: int,
-                               weekly=True,
-                               monthly=True,
-                               trg_column='item_cnt_day') -> Tuple[DataLoader]:
+def tde_dataset_wm(data: Series,
+                   seq: int,
+                   d_model: int,
+                   dilation: int,
+                   src_tgt_seq: Tuple[int],
+                   batch_size: int,
+                   weekly=True,
+                   monthly=True,
+                   ) -> Tuple[DataLoader]:
     """TDEに対応した曜日ラベルと月ラベル付与したデータセットのメイン関数"""
-    data = getattr(mode_of_freq(data), trg_column)
     index = data.index
     data = StandardScaler().fit_transform(data.values.reshape(-1, 1))
     data = data.reshape(-1)
@@ -159,9 +157,16 @@ def src_tgt_split(tded: ndarray,
                   tgt_seq: int
                   ) -> Tuple[ndarray]:
     """エンコーダ入力とデコーダ入力への分割"""
-    src = tded[:, :src_seq]
-    tgt = tded[:, -tgt_seq:]
-    return src, tgt
+    # 推論時
+    if tded.ndim == 2:
+        src = tded[:, :src_seq]
+        tgt = tded[:, -tgt_seq:]
+        return src.T, tgt.T
+    # 訓練時（バッチ対応）
+    if tded.ndim == 3:
+        src = tded[:, :src_seq]
+        tgt = tded[:, -tgt_seq:]
+        return src, tgt
 
 
 def to_torch_dataset(src: ndarray,
@@ -180,7 +185,7 @@ def to_torch_dataset(src: ndarray,
     label = label.reshape(-1, 1)[:len(src)]
     pack = (src, tgt, label)
     train_pack = [
-        torch.from_numpy(i.astype(np.float32))[:int(len(src) * train_rate)]
+        torch.from_numpy(i.astype(np.float32))[: int(len(src) * train_rate)]
         for i in pack
         ]
     test_pack = [
