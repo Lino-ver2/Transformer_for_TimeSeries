@@ -40,15 +40,15 @@ def tde_dataset_wm(data: Series,
     index = data.index
     if scaler is not None:
         data = scaler().fit_transform(data.values.reshape(-1, 1))
-    data = data.reshape(-1)
+        data = data.reshape(-1)
     x, y = expand_and_split(data, seq)
     tded, label = delay_embeddings(
-                                x, y,
-                                index,
-                                d_model,
-                                dilation,
-                                seq,
-                                weekly, monthly)
+                                   x, y,
+                                   index,
+                                   d_model,
+                                   dilation,
+                                   seq,
+                                   weekly, monthly)
     src, tgt = src_tgt_split(tded, *src_tgt_seq)
     train, test = to_torch_dataset(src, tgt, label, batch_size, train_rate)
     return train, test
