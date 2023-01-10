@@ -1,10 +1,10 @@
 import numpy as np
 import pandas as pd
-from sklearn.preprocessing import StandardScaler
+from sklearn.preprocessing import StandardScaler, MinMaxScaler
 import torch
 from torch.utils.data import TensorDataset
 
-from typing import Tuple, Optional
+from typing import Tuple, Optional, Union
 from pandas import DataFrame, Series, DatetimeIndex
 from numpy import ndarray
 from torch.utils.data import DataLoader
@@ -25,35 +25,21 @@ def select_device():
     return device
 
 
-def tde_dataset(data: Series,
-                seq: int,
-                d_model: int,
-                dilation: int,
-                src_tgt_seq: Tuple[int],
-                batch_size: int,
-                ) -> Tuple[DataLoader]:
-    """TDEデータセットのメイン関数"""
-    data = StandardScaler().fit_transform(data.values.reshape(-1, 1))
-    data = data.reshape(-1)
-    x, y = expand_and_split(data, seq)
-    tded, label = time_delay_embedding(x, y, d_model, dilation)
-    src, tgt = src_tgt_split(tded, *src_tgt_seq)
-    train, test = to_torch_dataset(src, tgt, label, batch_size)
-    return train, test
-
-
 def tde_dataset_wm(data: Series,
                    seq: int,
                    d_model: int,
                    dilation: int,
                    src_tgt_seq: Tuple[int],
                    batch_size: int,
+                   scaler: Optional[Union[StandardScaler, MinMaxScaler]],
                    weekly=True,
                    monthly=True,
+                   train_rate=0.9
                    ) -> Tuple[DataLoader]:
     """TDEに対応した曜日ラベルと月ラベル付与したデータセットのメイン関数"""
     index = data.index
-    data = StandardScaler().fit_transform(data.values.reshape(-1, 1))
+    if scaler is not None:
+        data = scaler().fit_transform(data.values.reshape(-1, 1))
     data = data.reshape(-1)
     x, y = expand_and_split(data, seq)
     tded, label = delay_embeddings(
@@ -64,7 +50,7 @@ def tde_dataset_wm(data: Series,
                                 seq,
                                 weekly, monthly)
     src, tgt = src_tgt_split(tded, *src_tgt_seq)
-    train, test = to_torch_dataset(src, tgt, label, batch_size)
+    train, test = to_torch_dataset(src, tgt, label, batch_size, train_rate)
     return train, test
 
 
@@ -173,7 +159,7 @@ def to_torch_dataset(src: ndarray,
                      tgt: ndarray,
                      label: ndarray,
                      batch_size: int,
-                     train_rate=0.9
+                     train_rate: float
                      ) -> DataLoader:
     """Pytorch用のデータセットへの変換
     引数:
