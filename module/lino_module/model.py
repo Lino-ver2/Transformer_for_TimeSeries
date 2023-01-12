@@ -171,7 +171,7 @@ def learning_plot(train_loss,
     plt.grid(axis='x')
     plt.grid(axis='y')
     plt.ylim(0, 1)
-    img_path = '../Lino_notebook/img_wm/'
+    img_path = img_path
     loss_name = f'Loss({name}).png'
     if saving:
         plt.savefig(img_path + loss_name)
