@@ -16,10 +16,11 @@ class TransformerModel(nn.Module):
     """Trasnsormer for Time Series
         参考論文: https://arxiv.org/abs/2001.08317
     """
-    def __init__(self, d_model: int, nhead: int):
+    def __init__(self, d_model: int, nhead: int, device):
         super(TransformerModel, self).__init__()
 
         self.positional = PositionalEncoding(d_model)
+        self.device = device
 
         encoder_layer = nn.TransformerEncoderLayer(
                                                 d_model,
@@ -54,7 +55,7 @@ class TransformerModel(nn.Module):
         # Encoder
         memory = self.transformer_encoder(src)
         # Decoder
-        output = self.transformer_decoder(tgt, memory, tgt_mask)
+        output = self.transformer_decoder(tgt, memory, tgt_mask.to(self.device))
         # 線形変で出力の形状へ
         pred = self.linear(output)
         return pred
@@ -97,7 +98,8 @@ class RMSELoss(nn.Module):
 
 
 def training(model: object,
-             dataset: DataLoader,
+             train: DataLoader,
+             test: DataLoader,
              device: torch.device,
              criterion: object,
              optimizer: object,
@@ -107,6 +109,7 @@ def training(model: object,
     """訓練用関数"""
     train_loss = []
     validation_loss = []
+    test_loss = []
     print(' start '.center(center, '-'))
     start_point = time.time()
     for epoch in range(epochs):
@@ -115,7 +118,7 @@ def training(model: object,
         validation_epoch_loss = []
 
         cache = None
-        for i, pack in enumerate(dataset):
+        for i, pack in enumerate(train):
             src, tgt, y = [content.to(device) for content in pack]
             # モデル訓練
             if i == 0:
@@ -126,7 +129,7 @@ def training(model: object,
                 model.train()
                 optimizer.zero_grad()
                 output = model(cached_src, cached_tgt)
-                loss = criterion(output[:, 1, :], cached_y)
+                loss = criterion(output.squeeze(), cached_y)
                 train_epoch_loss.append(loss.item())
                 # 勾配計算
                 loss.backward()
@@ -134,43 +137,61 @@ def training(model: object,
             # モデル評価
             model.eval()
             output = model(src, tgt)
-            loss = criterion(output[:, 1, :], y)
+            loss = criterion(output.squeeze(), y)
             validation_epoch_loss.append(loss.item())
             # データをキャッシュに保存して次回の訓練データにする
             cache = (src, tgt, y)
+        
+        test_epoch_loss = []
+        for pack in test:
+            src, tgt, y = [content.to(device) for content in pack]
+            model.eval()
+            output = model(src, tgt)
+            loss = criterion(output.reshape(-1), y.reshape(-1))
+            test_epoch_loss.append(loss.item())
 
         validation_loss.append(validation_epoch_loss)
         train_loss.append(train_epoch_loss)
+        test_loss.append(test_epoch_loss)
 
         if epoch % verbose == 0:
             print(f' epoch_{epoch} '.center(center))
             train_mean = torch.mean(torch.tensor(train_epoch_loss)).item()
-            test_mean = torch.mean(torch.tensor(validation_epoch_loss)).item()
+            valid_mean = torch.mean(torch.tensor(validation_epoch_loss)).item()
+            test_mean = torch.mean(torch.tensor(test_epoch_loss)).item()
             print('train_loss: ', round(train_mean, 4),
-                  '| validation_loss: ', round(test_mean, 4),
-                  '| time: ', round(time.time() - epoch_point, 3))
+                  '| validation_loss: ', round(valid_mean, 4),
+                  '| test_loss: ', round(test_mean, 4))
 
     print(' complete!! '.center(center, '-'))
     print(f'Execution_time: {round(time.time() - start_point, 3)}')
-    return model, torch.tensor(train_loss), torch.tensor(validation_loss)
+    return model, torch.tensor(train_loss), torch.tensor(validation_loss), torch.tensor(test_loss)
 
 
 # 以降は評価用関数
 def learning_plot(train_loss,
                   validation_loss,
+                  test_loss,
                   img_path,
                   name,
+                  scaler,
                   figsize,
                   saving=True):
     """訓練データから学習曲線をプロットする"""
     plt.figure(figsize=figsize)
     plt.plot([torch.mean(i) for i in train_loss], label=('train_loss'))
     plt.plot([torch.mean(i) for i in validation_loss], label='validation_loss')
+    plt.plot([torch.mean(i) for i in test_loss], label='test_loss')
     plt.legend()
-    plt.yticks([round(i*1e-1, 1) for i in range(1, 10)])
+    if scaler.__name__ == 'MinMaxScaler':
+        plt.yticks([round(i*1e-2, 2) for i in range(1, 10)])
+        plt.ylim(0, 0.1)
+    if scaler.__name__ == 'StandardScaler':
+        plt.yticks([round(i*1e-1, 2) for i in range(1, 10)])
+        plt.ylim(0, 1)
+    
     plt.grid(axis='x')
     plt.grid(axis='y')
-    plt.ylim(0, 1)
     img_path = img_path
     loss_name = f'Loss({name}).png'
     if saving:
@@ -179,18 +200,18 @@ def learning_plot(train_loss,
     return None
 
 
-def confirmation(model, train, test):
+def confirmation(model, train, test, device):
     """訓練データとテストデータを使った推測(教師強制と同じ推論であることに注意)"""
     model.eval()
     train_preds = []
     for src, tgt, _ in train:
-        train_pred = model(src, tgt)
-        train_preds.append(train_pred[:, -1])
+        train_pred = model(src.to(device), tgt.to(device))
+        train_preds.append(train_pred[:, -1].cpu())
 
     test_preds = []
     for src, tgt, _ in test:
-        test_pred = model(src, tgt)
-        test_preds.append(test_pred[:, -1])
+        test_pred = model(src.to(device), tgt.to(device))
+        test_preds.append(test_pred[:, -1].cpu())
     return train_preds, test_preds
 
 

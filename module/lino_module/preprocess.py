@@ -41,18 +41,18 @@ def tde_dataset_wm(data: Series,
     if scaler is not None:
         data = scaler().fit_transform(data.values.reshape(-1, 1))
         data = data.reshape(-1)
-    x, y = expand_and_split(data, seq)
+    x, y = expand_and_split(data, seq, src_tgt_seq[1])
     tded, label = delay_embeddings(
                                    x, y,
                                    index,
                                    d_model,
                                    dilation,
                                    seq,
+                                   src_tgt_seq,
                                    weekly, monthly)
     src, tgt = src_tgt_split(tded, *src_tgt_seq)
     train, test = to_torch_dataset(src, tgt, label, batch_size, train_rate)
     return train, test
-
 
 def mode_of_freq(data: DataFrame,
                  key='date',
@@ -73,7 +73,7 @@ def mode_of_freq(data: DataFrame,
     return mode_of_key()
 
 
-def expand_and_split(ds: Series, seq: int) -> Tuple[ndarray]:
+def expand_and_split(ds: Series, seq: int, tgt_seq: int) -> Tuple[ndarray]:
     """2次元にd_modelずらしたデータと正解データを作成する
     引数:
         ds: 単変量時系列データ
@@ -82,7 +82,7 @@ def expand_and_split(ds: Series, seq: int) -> Tuple[ndarray]:
     endpoint = len(ds) - (seq + 1)
     expanded = np.stack([ds[i: i + seq + 1] for i in range(0, endpoint)])
     x = expanded[:, :-1]
-    y = expanded[:, -1]
+    y = expanded[:, -tgt_seq:]
     return x, y
 
 
@@ -114,6 +114,7 @@ def delay_embeddings(x: ndarray,
                      d_model: int,
                      dilation: int,
                      seq: int,
+                     src_tgt_seq: Tuple[int],
                      weekly: bool,
                      monthly: bool):
     """TDEに対応した曜日、月時ラベルをconcatする"""
@@ -124,7 +125,7 @@ def delay_embeddings(x: ndarray,
     if weekly:
         # positional encodingのために0-1でスケーリング
         scaled_weekday = index.weekday / 6
-        week, _ = expand_and_split(scaled_weekday, seq)
+        week, _ = expand_and_split(scaled_weekday, seq, src_tgt_seq[1])
         tded_week = time_delay_embedding(week, None, d_model, dilation)
         tded = np.concatenate((tded, tded_week), axis=2)
 
@@ -132,7 +133,7 @@ def delay_embeddings(x: ndarray,
     if monthly:
         # positional encodingのために0-1でスケーリング
         scaled_month = (index.month - 1) / 11
-        month, _ = expand_and_split(scaled_month, seq)
+        month, _ = expand_and_split(scaled_month, seq, src_tgt_seq[1])
         tded_month = time_delay_embedding(month, None, d_model, dilation)
         tded = np.concatenate((tded, tded_month), axis=2)
     return tded, label
@@ -168,7 +169,10 @@ def to_torch_dataset(src: ndarray,
         label: 正解データ
         batch_size: ミニバッチのバッチサイズ
     """
-    label = label.reshape(-1, 1)[:len(src)]
+    if label.ndim == 1:
+        label = label.reshape(-1, 1)[:len(src)]
+    if label.ndim == 2:
+        label = label[:len(src)]
     pack = (src, tgt, label)
     train_pack = [
         torch.from_numpy(i.astype(np.float32))[: int(len(src) * train_rate)]
