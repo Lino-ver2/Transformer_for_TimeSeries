@@ -113,7 +113,6 @@ def training(model: object,
     print(' start '.center(center, '-'))
     start_point = time.time()
     for epoch in range(epochs):
-        epoch_point = time.time()
         train_epoch_loss = []
         validation_epoch_loss = []
 
@@ -141,7 +140,7 @@ def training(model: object,
             validation_epoch_loss.append(loss.item())
             # データをキャッシュに保存して次回の訓練データにする
             cache = (src, tgt, y)
-        
+
         test_epoch_loss = []
         for pack in test:
             src, tgt, y = [content.to(device) for content in pack]
@@ -189,7 +188,7 @@ def learning_plot(train_loss,
     if scaler.__name__ == 'StandardScaler':
         plt.yticks([round(i*1e-1, 2) for i in range(1, 10)])
         plt.ylim(0, 1)
-    
+
     plt.grid(axis='x')
     plt.grid(axis='y')
     img_path = img_path

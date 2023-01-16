@@ -21,8 +21,10 @@ class RecurrentInference():
                  d_model,
                  dilation,
                  src_tgt_seq,
-                 weekly=True,
-                 monthly=True):
+                 step_num,
+                 daily,
+                 weekly,
+                 monthly):
         """ Initializer
         引数:
             model: 訓練済みモデル
@@ -35,9 +37,11 @@ class RecurrentInference():
         """
         self.model: object = model
         self.seq: int = seq
-        self.src_tgt_seq: Tuple[int] = src_tgt_seq
         self.d_model: int = d_model
         self.dilation: int = dilation
+        self.src_tgt_seq: Tuple[int] = src_tgt_seq
+        self.step_num: int = step_num
+        self.daily: bool = daily
         self.weekly: bool = weekly
         self.monthly: bool = monthly
 
@@ -59,13 +63,18 @@ class RecurrentInference():
         reshaped = ds.values.reshape(-1, 1)
         self.scaler = scaler().fit(reshaped)
         scaled_ds = self.scaler.transform(reshaped).reshape(-1)
+
+        # 入力データから推論に持ちるデータフレームを生成
         self.df = pd.DataFrame(scaled_ds,
                                columns=['data'],
                                index=ds.index.tolist())
+        # 推論結果を書くのするデータフレームを生成
         self.latest_index = ds.index[-1]
         self.latest_data = ds[-1]
         self.inferenced = pd.Series(self.latest_data, index=[self.latest_index])
-
+        
+        if self.daily:
+            self.df['daily'] = ds.index.day / 31
         if self.weekly:
             self.df['weekly'] = ds.index.weekday / 6
         if self.monthly:
@@ -76,7 +85,6 @@ class RecurrentInference():
         引数:
             freq: 再帰推論回数
         """
-        step_num = 1  # ハードコードは後日改修
         for _ in range(freq):
             self.embedded = self.tde(self.df,
                                      self.seq,
@@ -84,8 +92,8 @@ class RecurrentInference():
                                      self.dilation)
             src, tgt = src_tgt_split(self.embedded, *self.src_tgt_seq)
             output = self.inference(self.model, src, tgt)
-            scaled = output[:, -step_num].reshape(-1, 1)
-            inversed = self.scaler.inverse_transform(scaled).item()
+            scaled = output[:, -self.step_num]
+            inversed = self.scaler.inverse_transform(scaled.reshape(-1, 1)).item()
 
             # 推論の追加
             self.latest_index = self.latest_index + datetime.timedelta(1)
@@ -93,6 +101,9 @@ class RecurrentInference():
 
             # datasetの更新
             latest_data = {'data': scaled.item()}
+            if self.daily:
+                scaled_daily = self.latest_index.day / 31
+                latest_data['daily'] = scaled_daily
             if self.weekly:
                 scaled_weekday = self.latest_index.weekday() / 6
                 latest_data['weekly'] = scaled_weekday
@@ -102,7 +113,7 @@ class RecurrentInference():
             latest = pd.DataFrame(latest_data, index=[self.latest_index])
             self.df = pd.concat((self.df, latest))
         return self.inferenced
-
+    
     @classmethod
     def tde(self,
             df: DataFrame,
