@@ -59,7 +59,7 @@ class RecurrentInference():
             ds: 訓練データセット作成時に使用したシリーズ
             scaler: 訓練時に使用したスケーラー
         """
-        self.origin = ds
+        self.origin = ds.copy()
         reshaped = ds.values.reshape(-1, 1)
         self.scaler = scaler().fit(reshaped)
         scaled_ds = self.scaler.transform(reshaped).reshape(-1)
@@ -69,9 +69,9 @@ class RecurrentInference():
                                columns=['data'],
                                index=ds.index.tolist())
         # 推論結果を書くのするデータフレームを生成
-        self.latest_index = ds.index[-1]
-        self.latest_data = ds[-1]
-        self.inferenced = pd.Series(self.latest_data, index=[self.latest_index])
+        self.latest_index = ds.index[-self.step_num:]
+        self.latest_data = ds[-self.step_num:]
+        self.inferenced = pd.Series(self.latest_data, index=self.latest_index)
         
         if self.daily:
             self.df['daily'] = ds.index.day / 31
@@ -91,29 +91,31 @@ class RecurrentInference():
                                      self.d_model,
                                      self.dilation)
             src, tgt = src_tgt_split(self.embedded, *self.src_tgt_seq)
-            output = self.inference(self.model, src, tgt)
-            scaled = output[:, -self.step_num]
-            inversed = self.scaler.inverse_transform(scaled.reshape(-1, 1)).item()
+            output = self.inference(self.model, src, tgt).reshape(-1)
+            scaled = output[-self.step_num:]
+            inversed = self.scaler.inverse_transform(scaled.reshape(-1, 1))
+            inversed = inversed.reshape(-1)
 
             # 推論の追加
-            self.latest_index = self.latest_index + datetime.timedelta(1)
-            self.inferenced[self.latest_index] = inversed
+            self.latest_index += datetime.timedelta(self.step_num)
+            inferenced = pd.Series(inversed, index=self.latest_index)
+            self.inferenced = pd.concat((self.inferenced, inferenced))
 
             # datasetの更新
-            latest_data = {'data': scaled.item()}
+            latest_data = {'data': scaled}
             if self.daily:
                 scaled_daily = self.latest_index.day / 31
                 latest_data['daily'] = scaled_daily
             if self.weekly:
-                scaled_weekday = self.latest_index.weekday() / 6
+                scaled_weekday = self.latest_index.weekday / 6
                 latest_data['weekly'] = scaled_weekday
             if self.monthly:
                 scaled_month = (self.latest_index.month - 1) / 11
                 latest_data['monthly'] = scaled_month
-            latest = pd.DataFrame(latest_data, index=[self.latest_index])
+            latest = pd.DataFrame(latest_data, index=self.latest_index)
             self.df = pd.concat((self.df, latest))
         return self.inferenced
-    
+
     @classmethod
     def tde(self,
             df: DataFrame,
