@@ -24,6 +24,7 @@ class RecurrentInference():
                  step_num,
                  daily,
                  weekly,
+                 weekly_num,
                  monthly):
         """ Initializer
         引数:
@@ -43,6 +44,7 @@ class RecurrentInference():
         self.step_num: int = step_num
         self.daily: bool = daily
         self.weekly: bool = weekly
+        self.weekly_num: bool = weekly_num
         self.monthly: bool = monthly
 
         self.origin: Optional[Series] = None
@@ -72,11 +74,14 @@ class RecurrentInference():
         self.latest_index = ds.index[-self.step_num:]
         self.latest_data = ds[-self.step_num:]
         self.inferenced = pd.Series(self.latest_data, index=self.latest_index)
-        
+
         if self.daily:
             self.df['daily'] = ds.index.day / 31
         if self.weekly:
             self.df['weekly'] = ds.index.weekday / 6
+        if self.weekly_num:
+            scaled_calendar = (ds.index.isocalendar().week - 1) / 44
+            self.df['weekly_num'] = scaled_calendar.values
         if self.monthly:
             self.df['monthly'] = (ds.index.month - 1) / 11
 
@@ -93,8 +98,7 @@ class RecurrentInference():
             src, tgt = src_tgt_split(self.embedded, *self.src_tgt_seq)
             output = self.inference(self.model, src, tgt).reshape(-1)
             scaled = output[-self.step_num:]
-            inversed = self.scaler.inverse_transform(scaled.reshape(-1, 1))
-            inversed = inversed.reshape(-1)
+            inversed = self.scaler.inverse_transform(scaled.reshape(-1, 1)).reshape(-1)
 
             # 推論の追加
             self.latest_index += datetime.timedelta(self.step_num)
@@ -109,6 +113,9 @@ class RecurrentInference():
             if self.weekly:
                 scaled_weekday = self.latest_index.weekday / 6
                 latest_data['weekly'] = scaled_weekday
+            if self.weekly_num:
+                scaled_weekly_num = (self.latest_index.isocalendar().week - 1) / 44
+                latest_data['weekly_num'] = scaled_weekly_num
             if self.monthly:
                 scaled_month = (self.latest_index.month - 1) / 11
                 latest_data['monthly'] = scaled_month
@@ -125,7 +132,7 @@ class RecurrentInference():
             ) -> ndarray:
         """Time delay Embedding
            入力データ末端のseq分からTDEデータを作成
-        引数: 
+        引数:
             df: [data, weekly, monthly]のカラムと Timestamp インデックスを持ったデータフレーム
             seq: 訓練条件時の seq
             d_model: 訓練条件時の d_model
