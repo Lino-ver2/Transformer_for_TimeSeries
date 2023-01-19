@@ -2,7 +2,6 @@ import datetime
 
 import pandas as pd
 import numpy as np
-from sklearn.preprocessing import StandardScaler, MinMaxScaler
 import torch
 
 from module.lino_module.preprocess import src_tgt_split
@@ -10,6 +9,7 @@ from module.lino_module.preprocess import src_tgt_split
 from typing import Tuple, Optional, Union
 from numpy import ndarray
 from pandas import DataFrame, Series, Timestamp
+from sklearn.preprocessing import StandardScaler, MinMaxScaler
 from torch import Tensor
 
 
@@ -33,8 +33,11 @@ class RecurrentInference():
             d_model: 訓練条件時の d_model
             dilation: 訓練条件時の dilation
             src_tgt_seq: 訓練条件時の src_tgt_seq,
+            step_num: 一回の推論における予測日数
+            daily: 訓練条件時の日付情報の有無
             weekly: 訓練条件時の曜日情報の有無
-            monthly: 訓練条件時の月情報の有無
+            weekly_num: 訓練条件時の週次情報の有無
+            monthly: 訓練条件時の月次情報の有無
         """
         self.model: object = model
         self.seq: int = seq
@@ -50,9 +53,9 @@ class RecurrentInference():
         self.origin: Optional[Series] = None
         self.df: Optional[DataFrame] = None
         self.inferenced: Optional[Series] = None
-        self.embedded: ndarray = None
-        self.latest_index: Timestamp = None
-        self.latest_data: float = None
+        self.embedded: Optional[ndarray] = None
+        self.latest_index: Optional[Timestamp] = None
+        self.latest_data: Optional[float] = None
         self.scaler: Optional[object] = None
 
     def __call__(self, ds: Series, scaler: Union[StandardScaler, MinMaxScaler]):
@@ -98,7 +101,8 @@ class RecurrentInference():
             src, tgt = src_tgt_split(self.embedded, *self.src_tgt_seq)
             output = self.inference(self.model, src, tgt).reshape(-1)
             scaled = output[-self.step_num:]
-            inversed = self.scaler.inverse_transform(scaled.reshape(-1, 1)).reshape(-1)
+            inversed = self.scaler.inverse_transform(scaled.reshape(-1, 1))
+            inversed = inversed.reshape(-1)
 
             # 推論の追加
             self.latest_index += datetime.timedelta(self.step_num)
