@@ -6,10 +6,10 @@ from torch import Tensor
 
 
 class WithAuxiliary(nn.Module):
-    def __init__(self, d_model, head, device):
+    def __init__(self, base_model, auxiliary_model):
         super(WithAuxiliary, self).__init__()
-        self.base = TransformerModel(d_model, head, device)
-        self.auxiliary = TransformerModel(d_model, head, device)
+        self.base = base_model
+        self.auxiliary = auxiliary_model
 
     def forward(self, src, tgt, y=None):
         base_pred = self.base(src, tgt)

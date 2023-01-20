@@ -4,5 +4,6 @@ __pycache__/
 memos/
 models/
 models_wm/
+models_ax/
 .DS_Store
 memo.ipynb

@@ -41,13 +41,18 @@ def confirmation(model, train, test, device):
     """訓練データとテストデータを使った推測(教師強制と同じ推論であることに注意)"""
     model.eval()
     train_preds = []
+    model_name = model._get_name()
     for src, tgt, _ in train:
         train_pred = model(src.to(device), tgt.to(device))
+        if model_name == 'WithAuxiliary':
+            train_pred = train_pred[0] + train_pred[1]
         train_preds.append(train_pred[:, -1].cpu())
 
     test_preds = []
     for src, tgt, _ in test:
         test_pred = model(src.to(device), tgt.to(device))
+        if model_name == 'WithAuxiliary':
+            test_pred = test_pred[0] + test_pred[1]
         test_preds.append(test_pred[:, -1].cpu())
     return train_preds, test_preds
 
