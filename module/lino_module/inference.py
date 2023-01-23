@@ -116,7 +116,7 @@ class RecurrentInference():
                 latest_data['monthly'] = scaled_month
             latest = pd.DataFrame(latest_data, index=self.latest_index)
             self.df = pd.concat((self.df, latest))
-        return self.inferenced
+        return self.inferenced[self.step_num:]
 
     @classmethod
     def tde(self,
@@ -148,7 +148,11 @@ class RecurrentInference():
         src = torch.from_numpy(src.astype(np.float32)).unsqueeze(0)
         tgt = torch.from_numpy(tgt.astype(np.float32)).unsqueeze(0)
         model.eval()
-        output = model(src, tgt).detach().numpy()
+        if model._get_name() == 'WithAuxiliary':
+            base, auxi = model(src, tgt)
+            output = base.detach().numpy() + auxi.detach().numpy()
+        else:
+            output = model(src, tgt).detach().numpy()
         return output
 
     @classmethod
