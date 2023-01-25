@@ -2,16 +2,21 @@ import math
 
 import torch
 import torch.nn as nn
+
+from typing import Callable, Optional
 from torch import Tensor
 
 
 class WithAuxiliary(nn.Module):
     def __init__(self, base_model, auxiliary_model):
         super(WithAuxiliary, self).__init__()
-        self.base = base_model
-        self.auxiliary = auxiliary_model
+        self.base: Callable[[Tensor], Tensor] = base_model
+        self.auxiliary: Callable[[Tensor], Tensor] = auxiliary_model
 
-    def forward(self, src, tgt, y=None):
+    def forward(self,
+                src: Tensor,
+                tgt: Tensor,
+                y: Optional[Tensor] = None) -> Tensor:
         base_pred = self.base(src, tgt)
         auxiliary_pred = self.base(src, tgt)
         if self.training:
@@ -109,10 +114,11 @@ class RMSELoss(nn.Module):
 class LossWithAuxiliary(nn.Module):
     def __init__(self, base_func, auxiliary_func):
         super(LossWithAuxiliary, self).__init__()
-        self.base_func = base_func
-        self.auxiliary_func = auxiliary_func
+        self.base_func: Callable[[Tensor], Tensor] = base_func
+        self.auxiliary_func: Callable[[Tensor], Tensor] = auxiliary_func
 
-    def forward(self, base_pred, auxiliary_pred, y, auxiliary_label):
+    def forward(self, base_pred: Tensor, auxiliary_pred: Tensor,
+                y: Tensor, auxiliary_label: Tensor) -> Tensor:
         base_loss = self.base_func(base_pred, y)
         auxiliary_loss = self.auxiliary_func(auxiliary_pred, auxiliary_label)
         loss = base_loss * 0.5 + auxiliary_loss * 0.5

@@ -1,22 +1,22 @@
 import time
 
 import torch
+
+from typing import List, Dict, Tuple, Callable, Optional
 from torch import Tensor
 from torch.utils.data import DataLoader
 
-from typing import Tuple
 
-
-def training_with_auxiliary(model: object,
+def training_with_auxiliary(model: Callable[[Tensor], Tensor],
                             train: DataLoader,
                             test: DataLoader,
                             device: torch.device,
-                            criterion: object,
+                            criterion: Callable[[Tensor], Tensor],
                             optimizer: object,
                             epochs: int,
                             verbose=10,
                             center=80) -> Tuple[object, Tensor, Tensor]:
-    """訓練用関数"""
+    """補助モデルを取り入れた訓練用関数"""
     loss_pack = {'train': {'loss': [], 'base': [],
                            'auxiliary': [], 'auxiliary_rate': []},
                  'eval': {'loss': [], 'base': [],
@@ -42,7 +42,7 @@ def training_with_auxiliary(model: object,
             else:
                 # キャッシュから１バッチ前のデータで訓練
                 loss = training_eval(model, optimizer, criterion, cache,
-                                        epoch_loss, 'train')
+                                     epoch_loss, 'train')
                 # 勾配計算
                 loss.backward()
                 optimizer.step()
@@ -66,13 +66,18 @@ def training_with_auxiliary(model: object,
 
         # lossのログを表示
         logger(verbose, epoch, center, epoch_loss)
-
     print(' complete!! '.center(center, '-'))
     print(f'Execution_time: {round(time.time() - start_point, 3)}')
     return loss_pack
 
 
-def training_eval(model, optimizer, criterion, inputs, epoch_loss, mode):
+def training_eval(model: Callable[[Tensor], Tensor],
+                  optimizer: object,
+                  criterion: Callable[[Tensor], Tensor],
+                  inputs: Tuple[Tensor],
+                  epoch_loss: Dict[str, Dict[str, List[Optional[int]]]],
+                  mode: str) -> Optional[int]:
+    """モデルへの入力関数"""
     src, tgt, y = inputs
     key = mode
     if mode == 'test':
@@ -93,21 +98,35 @@ def training_eval(model, optimizer, criterion, inputs, epoch_loss, mode):
     return None
 
 
-def appender(dic1, dic2, mode):
+def appender(dic1: Dict[str, Dict[str, List[Optional[List[int]]]]],
+             dic2: Dict[str, Dict[str, List[Optional[int]]]],
+             mode: str) -> None:
+    """損失状況の更新"""
     for key, value in dic2[mode].items():
         dic1[mode][key].append(value)
     return None
 
 
-def logger(verbose, epoch, center, epoch_loss):
+def logger(verbose: int,
+           epoch: int,
+           center: int,
+           epoch_loss: Dict[str, Dict[str, List[Optional[int]]]]) -> None:
     if verbose == 0:
         return None
     elif epoch % verbose == 0:
         print(f' epoch_{epoch} '.center(center))
-        train_mean = torch.mean(torch.tensor(epoch_loss['train']['loss'])).item()
-        valid_mean = torch.mean(torch.tensor(epoch_loss['eval']['loss'])).item()
-        test_mean = torch.mean(torch.tensor(epoch_loss['test']['loss'])).item()
-        auxiliary_rate = torch.mean(torch.tensor(epoch_loss['train']['auxiliary_rate'])).item()
+        train_mean = torch.mean(
+                        torch.tensor(epoch_loss['train']['loss'])
+                        ).item()
+        valid_mean = torch.mean(
+                        torch.tensor(epoch_loss['eval']['loss'])
+                        ).item()
+        test_mean = torch.mean(
+                        torch.tensor(epoch_loss['test']['loss'])
+                        ).item()
+        auxiliary_rate = torch.mean(
+                            torch.tensor(epoch_loss['train']['auxiliary_rate'])
+                            ).item()
         print('train_loss: ', round(train_mean, 4),
               '| validation_loss: ', round(valid_mean, 4),
               '| test_loss: ', round(test_mean, 4),
@@ -115,7 +134,7 @@ def logger(verbose, epoch, center, epoch_loss):
         return None
 
 
-def training(model: object,
+def training(model: Callable[[Tensor], Tensor],
              train: DataLoader,
              test: DataLoader,
              device: torch.device,
