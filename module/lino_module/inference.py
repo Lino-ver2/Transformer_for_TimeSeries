@@ -15,8 +15,8 @@ from torch import Tensor
 
 class RecurrentInference():
     """再起的に推論を行うクラス"""
-    def __init__(self, model, seq, d_model, dilation, src_tgt_seq, step_num,
-                 daily, weekly, weekly_num, monthly):
+    def __init__(self, data, model, seq, d_model, dilation, src_tgt_seq,
+                 step_num, daily, weekly, weekly_num, monthly, scaler):
         """ Initializer
         引数:
             model: 訓練済みモデル
@@ -30,6 +30,7 @@ class RecurrentInference():
             weekly_num: 訓練条件時の週次情報の有無
             monthly: 訓練条件時の月次情報の有無
         """
+        self.training_data: Series = data
         self.model: object = model
         self.seq: int = seq
         self.d_model: int = d_model
@@ -40,24 +41,24 @@ class RecurrentInference():
         self.weekly: bool = weekly
         self.weekly_num: bool = weekly_num
         self.monthly: bool = monthly
+        self.scaler:  Union[StandardScaler, MinMaxScaler] = scaler
 
-        self.origin: Optional[Series] = None
         self.df: Optional[DataFrame] = None
         self.inferenced: Optional[Series] = None
         self.embedded: Optional[ndarray] = None
         self.latest_index: Optional[Timestamp] = None
         self.latest_data: Optional[float] = None
-        self.scaler: Optional[object] = None
 
-    def __call__(self, ds: Series, scaler: Union[StandardScaler, MinMaxScaler]):
+    def __call__(self, ds: Series):
         """入力データを登録
         引数:
             ds: 訓練データセット作成時に使用したシリーズ
             scaler: 訓練時に使用したスケーラー
         """
-        self.origin = ds.copy()
+        fit_target = self.training_data.values.reshape(-1, 1)
+        self.scaler = self.scaler().fit(fit_target)
+
         reshaped = ds.values.reshape(-1, 1)
-        self.scaler = scaler().fit(reshaped)
         scaled_ds = self.scaler.transform(reshaped).reshape(-1)
 
         # 入力データから推論に持ちるデータフレームを生成
@@ -79,7 +80,7 @@ class RecurrentInference():
         if self.monthly:
             self.df['monthly'] = (ds.index.month - 1) / 11
 
-    def predict(self, freq):
+    def predict(self, freq: int) -> Series:
         """推論用関数
         引数:
             freq: 再帰推論回数
