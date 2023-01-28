@@ -16,7 +16,7 @@ from torch import Tensor
 class RecurrentInference():
     """再起的に推論を行うクラス"""
     def __init__(self, data, model, seq, d_model, dilation, src_tgt_seq,
-                 step_num, daily, weekly, weekly_num, monthly, scaler):
+                 step_num, daily, weekday, weekly, monthly, scaler):
         """ Initializer
         引数:
             model: 訓練済みモデル
@@ -26,8 +26,8 @@ class RecurrentInference():
             src_tgt_seq: 訓練条件時の src_tgt_seq,
             step_num: 一回の推論における予測日数
             daily: 訓練条件時の日付情報の有無
-            weekly: 訓練条件時の曜日情報の有無
-            weekly_num: 訓練条件時の週次情報の有無
+            weekday: 訓練条件時の曜日情報の有無
+            weekly: 訓練条件時の週次情報の有無
             monthly: 訓練条件時の月次情報の有無
         """
         self.training_data: Series = data
@@ -38,8 +38,8 @@ class RecurrentInference():
         self.src_tgt_seq: Tuple[int] = src_tgt_seq
         self.step_num: int = step_num
         self.daily: bool = daily
+        self.weekday: bool = weekday
         self.weekly: bool = weekly
-        self.weekly_num: bool = weekly_num
         self.monthly: bool = monthly
         self.scaler:  Union[StandardScaler, MinMaxScaler] = scaler
 
@@ -72,11 +72,11 @@ class RecurrentInference():
 
         if self.daily:
             self.df['daily'] = ds.index.day / 31
+        if self.weekday:
+            self.df['weekday'] = ds.index.weekday / 6
         if self.weekly:
-            self.df['weekly'] = ds.index.weekday / 6
-        if self.weekly_num:
             scaled_calendar = (ds.index.isocalendar().week - 1) / 44
-            self.df['weekly_num'] = scaled_calendar.values
+            self.df['weekly'] = scaled_calendar.values
         if self.monthly:
             self.df['monthly'] = (ds.index.month - 1) / 11
 
@@ -106,12 +106,12 @@ class RecurrentInference():
             if self.daily:
                 scaled_daily = self.latest_index.day / 31
                 latest_data['daily'] = scaled_daily
-            if self.weekly:
+            if self.weekday:
                 scaled_weekday = self.latest_index.weekday / 6
-                latest_data['weekly'] = scaled_weekday
-            if self.weekly_num:
-                scaled_weekly_num = (self.latest_index.isocalendar().week - 1) / 44
-                latest_data['weekly_num'] = scaled_weekly_num
+                latest_data['weekday'] = scaled_weekday
+            if self.weekly:
+                scaled_weekly = (self.latest_index.isocalendar().week - 1) / 44
+                latest_data['weekly'] = scaled_weekly
             if self.monthly:
                 scaled_month = (self.latest_index.month - 1) / 11
                 latest_data['monthly'] = scaled_month
@@ -157,12 +157,8 @@ class RecurrentInference():
         return output
 
     @classmethod
-    def tde_for_inference(self,
-                          ds: Series,
-                          seq: int,
-                          d_model: int,
-                          dilation: int
-                          ) -> ndarray:
+    def tde_for_inference(self, ds: Series, seq: int,
+                          d_model: int, dilation: int) -> ndarray:
         for_array = []
         for i in range(d_model):
             if i != 0:

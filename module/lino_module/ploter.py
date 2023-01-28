@@ -28,7 +28,7 @@ def learning_plot(train_loss,
 
     plt.grid(axis='x')
     plt.grid(axis='y')
-    plt.title(name[:-31])
+    plt.title(name)
     img_path = img_path
     loss_name = f'Loss({name}).png'
     if saving:
@@ -108,7 +108,7 @@ def confirmation_plot(train_time_series,
     plt.plot(train_time_series, label='train_preds')
     plt.plot(test_time_series, label='test_preds')
     plt.grid(axis='x')
-    plt.title(name[:-31])
+    plt.title(name)
     plt.legend()
 
     predict_name = f'Predict({name}).png'

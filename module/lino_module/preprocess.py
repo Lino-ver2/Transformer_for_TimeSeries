@@ -53,8 +53,8 @@ def tde_dataset_wm(data: Series,
                    batch_size: int,
                    scaler: Optional[Union[StandardScaler, MinMaxScaler]],
                    daily: bool,
-                   weekly: bool,
-                   weekly_num: bool,
+                   weekday: bool,
+                   weekly:  bool,
                    monthly: bool,
                    train_rate: float,
                    ) -> Tuple[DataLoader]:
@@ -70,7 +70,7 @@ def tde_dataset_wm(data: Series,
                                    seq,
                                    src_tgt_seq,
                                    step_num,
-                                   daily, weekly, weekly_num, monthly)
+                                   daily, weekday, weekly, monthly)
     src, tgt = src_tgt_split(tded, *src_tgt_seq)
     train, test = to_torch_dataset(src, tgt, label, batch_size, train_rate)
     return train, test
@@ -83,8 +83,8 @@ def delay_embeddings(data: Series,
                      src_tgt_seq: Tuple[int],
                      step_num: int,
                      daily: bool,
+                     weekday: bool,
                      weekly: bool,
-                     weekly_num: bool,
                      monthly: bool):
     """TDEに対応した曜日、月時ラベルをconcatする"""
     # Time Delay Embedding
@@ -100,14 +100,14 @@ def delay_embeddings(data: Series,
         tded = np.concatenate((tded, tded_day), axis=2)
 
     # 曜日ラベル
-    if weekly:
+    if weekday:
         scaled_weekday = index.weekday / 6  # 0-1正規化
         week, _ = expand_and_split(scaled_weekday, seq, src_tgt_seq[1], step_num)
         tded_week = time_delay_embedding(week, None, d_model, dilation)
         tded = np.concatenate((tded, tded_week), axis=2)
 
     # 週次ラベル
-    if weekly_num:
+    if weekly:
         scaled_week_num = (index.isocalendar().week - 1) / 44  # 0-1正規化
         week_num, _ = expand_and_split(scaled_week_num, seq, src_tgt_seq[1], step_num)
         tded_week_num = time_delay_embedding(week_num, None, d_model, dilation)
