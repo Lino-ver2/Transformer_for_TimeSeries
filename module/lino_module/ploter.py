@@ -15,9 +15,10 @@ def learning_plot(train_loss,
                   saving=True):
     """訓練データから学習曲線をプロットする"""
     plt.figure(figsize=figsize)
+    test_loss_list = [torch.mean(i) for i in test_loss]
     plt.plot([torch.mean(i) for i in train_loss], label=('train_loss'))
     plt.plot([torch.mean(i) for i in validation_loss], label='validation_loss')
-    plt.plot([torch.mean(i) for i in test_loss], label='test_loss')
+    plt.plot(test_loss_list, label='test_loss')
     plt.legend()
     if scaler.__name__ == 'MinMaxScaler':
         plt.yticks([round(i*1e-2, 2) for i in range(1, 10)])
@@ -28,7 +29,8 @@ def learning_plot(train_loss,
 
     plt.grid(axis='x')
     plt.grid(axis='y')
-    plt.title(name)
+    loss_title = round(test_loss_list[-1].item(), 4)
+    plt.title(f'Test Loss: {loss_title}\n' + name)
     img_path = img_path
     loss_name = f'Loss({name}).png'
     if saving:
@@ -114,5 +116,19 @@ def confirmation_plot(train_time_series,
     predict_name = f'Predict({name}).png'
     if saving:
         plt.savefig(img_path + predict_name)
+    plt.show()
+    return None
+
+
+# 再帰推論用プロット
+def inference_ploter(ori, pred, label, title, path, figsize, saving):
+    plt.figure(figsize=figsize)
+    plt.plot(ori, label='origin', alpha=0.5)
+    plt.plot(pred, label=label)
+    plt.grid(axis='x')
+    plt.title(title)
+    plt.legend()
+    if saving:
+        plt.savefig(path)
     plt.show()
     return None

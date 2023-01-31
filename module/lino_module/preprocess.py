@@ -44,6 +44,25 @@ def mode_of_freq(data: DataFrame,
     return mode_of_key()
 
 
+def mode_of_freq(data: DataFrame,
+                 key='date',
+                 freq='D',
+                 mode='sum'
+                 ) -> DataFrame:
+    """時系列データを基本統計量で統合する
+    引数:
+        data: 対象を含むオリジナルデータ
+        key: 時間軸のカラム名
+        freq: グループ単位（D: 日ごと, M: 月ごと, Y: 年ごと）
+        mode: 統計量（sum, mean, etc）
+    """
+    # 日付をobjectからdate_time型に変更
+    data[key] = pd.to_datetime(data[key], format=('%d.%m.%Y'))
+    # 時系列(key)についてグループ単位(freq)の売上数の基本統計量(mode)で出力
+    mode_of_key = getattr(data.groupby(pd.Grouper(key=key, freq=freq)), mode)
+    return mode_of_key()
+
+
 def tde_dataset_wm(data: Series,
                    seq: int,
                    d_model: int,
@@ -76,16 +95,10 @@ def tde_dataset_wm(data: Series,
     return train, test
 
 
-def delay_embeddings(data: Series,
-                     d_model: int,
-                     dilation: int,
-                     seq: int,
-                     src_tgt_seq: Tuple[int],
-                     step_num: int,
-                     daily: bool,
-                     weekday: bool,
-                     weekly: bool,
-                     monthly: bool):
+def delay_embeddings(data: Series, d_model: int, dilation: int, seq: int,
+                     src_tgt_seq: Tuple[int], step_num: int,
+                     daily: bool, weekday: bool, weekly: bool, monthly: bool
+                     ) -> Tuple[ndarray]:
     """TDEに対応した曜日、月時ラベルをconcatする"""
     # Time Delay Embedding
     index = data.index
@@ -132,18 +145,15 @@ def expand_and_split(ds: Series,
         ds: 単変量時系列データ
         seq: transformerのシーケンス
     """
-    endpoint = len(ds) - (seq + 1)
-    expanded = np.stack([ds[i: i + seq + 1] for i in range(0, endpoint)])
+    endpoint = len(ds) - (seq + tgt_seq + 1)
+    expanded = np.stack([ds[i: i + seq + step_num] for i in range(0, endpoint)])
     x = expanded[:, :-step_num]
     y = expanded[:, -tgt_seq:]
     return x, y
 
 
-def time_delay_embedding(x: ndarray,
-                         y: Optional[ndarray],
-                         d_model: int,
-                         dilation: int
-                         ) -> Tuple[ndarray]:
+def time_delay_embedding(x: ndarray, y: Optional[ndarray],
+                         d_model: int, dilation: int) -> Tuple[ndarray]:
     """Time Delay Embedding
     引数:
         x: 訓練データ
@@ -161,10 +171,7 @@ def time_delay_embedding(x: ndarray,
     return np.array(tded)
 
 
-def src_tgt_split(tded: ndarray,
-                  src_seq: int,
-                  tgt_seq: int
-                  ) -> Tuple[ndarray]:
+def src_tgt_split(tded: ndarray, src_seq: int, tgt_seq: int) -> Tuple[ndarray]:
     """エンコーダ入力とデコーダ入力への分割"""
     # 推論時
     if tded.ndim == 2:
@@ -178,12 +185,8 @@ def src_tgt_split(tded: ndarray,
         return src, tgt
 
 
-def to_torch_dataset(src: ndarray,
-                     tgt: ndarray,
-                     label: ndarray,
-                     batch_size: int,
-                     train_rate: float
-                     ) -> DataLoader:
+def to_torch_dataset(src: ndarray, tgt: ndarray, label: ndarray,
+                     batch_size: int, train_rate: float) -> DataLoader:
     """Pytorch用のデータセットへの変換
     引数:
         src: エンコーダ入力データ
