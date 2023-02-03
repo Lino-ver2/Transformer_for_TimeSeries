@@ -32,9 +32,9 @@ class TransformerModel(nn.Module):
     """
     def __init__(self, d_model: int, nhead: int, device):
         super(TransformerModel, self).__init__()
-
-        self.positional = PositionalEncoding(d_model)
         self.device = device
+        self.positional = PositionalEncoding(d_model)
+        self.mask_generator = MaskGenerator()
 
         encoder_layer = nn.TransformerEncoderLayer(
                                                 d_model,
@@ -62,24 +62,29 @@ class TransformerModel(nn.Module):
     def forward(self, src: Tensor, tgt: Tensor) -> Tensor:
         # Decoder用のtgt_maskを作成
         _, tgt_seq, _ = tgt.shape
-        tgt_mask = _generate_mask(tgt_seq)   # A-look ahead mask
+        self.tgt_mask = self.mask_generator(tgt_seq).to(self.device)  # A-look ahead mask
 
         # Positional Encoding
         src = self.positional(src)
         # Encoder
         memory = self.transformer_encoder(src)
         # Decoder
-        output = self.transformer_decoder(tgt, memory, tgt_mask.to(self.device))
+        output = self.transformer_decoder(tgt, memory, self.tgt_mask)
         # 線形変で出力の形状へ
         pred = self.linear(output)
         return pred
 
 
-def _generate_mask(tgt_seq: int) -> Tensor:
-    """デコーダ入力用の Self Attention用のマスクを作成"""
-    inf_mask = torch.ones(tgt_seq, tgt_seq) * float('-inf')
-    tgt_mask = torch.triu(inf_mask, diagonal=1)
-    return tgt_mask
+class MaskGenerator(nn.Module):
+    def __init__(self):
+        super(MaskGenerator, self).__init__()
+        self.attn_mask = None
+
+    def forward(self, tgt_seq) -> Tensor:
+        """デコーダ入力用の Self Attention用のマスクを作成"""
+        inf_mask = torch.ones(tgt_seq, tgt_seq) * float('-inf')
+        self.attn_mask = torch.triu(inf_mask, diagonal=1)
+        return self.attn_mask
 
 
 class PositionalEncoding(nn.Module):

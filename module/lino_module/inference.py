@@ -15,7 +15,7 @@ from torch import Tensor
 
 class RecurrentInference():
     """再起的に推論を行うクラス"""
-    def __init__(self, data, model, seq, d_model, dilation, src_tgt_seq,
+    def __init__(self, model, data, seq, d_model, dilation, src_tgt_seq,
                  step_num, daily, weekday, weekly, monthly, scaler):
         """ Initializer
         引数:
@@ -30,8 +30,8 @@ class RecurrentInference():
             weekly: 訓練条件時の週次情報の有無
             monthly: 訓練条件時の月次情報の有無
         """
-        self.training_data: Series = data
         self.model: object = model
+        self.training_data: Series = data
         self.seq: int = seq
         self.d_model: int = d_model
         self.dilation: int = dilation

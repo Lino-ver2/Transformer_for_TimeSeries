@@ -66,6 +66,7 @@ def training_with_auxiliary(model: Callable[[Tensor], Tensor],
 
         # lossのログを表示
         logger(verbose, epoch, center, epoch_loss)
+        time.sleep(0.5)
     print(' complete!! '.center(center, '-'))
     print(f'Execution_time: {round(time.time() - start_point, 3)}')
     return loss_pack
@@ -131,6 +132,7 @@ def logger(verbose: int,
               '| validation_loss: ', round(valid_mean, 4),
               '| test_loss: ', round(test_mean, 4),
               '| auxiliary_rate: ', round(auxiliary_rate, 4))
+        time.sleep(0.5)
         return None
 
 

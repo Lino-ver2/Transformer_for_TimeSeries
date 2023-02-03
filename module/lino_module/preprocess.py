@@ -1,12 +1,18 @@
+import os
+import time
+import pickle
+import pathlib
+
 import numpy as np
 import pandas as pd
 from sklearn.preprocessing import StandardScaler, MinMaxScaler
 import torch
 from torch.utils.data import TensorDataset
 
-from typing import Tuple, Optional, Union
+from typing import Tuple, Dict, Optional, Union, Callable
 from pandas import DataFrame, Series
 from numpy import ndarray
+from torch import Tensor
 from torch.utils.data import DataLoader
 
 
@@ -212,3 +218,34 @@ def to_torch_dataset(src: ndarray, tgt: ndarray, label: ndarray,
     test = TensorDataset(*test_pack)
     test = DataLoader(test, batch_size=1, shuffle=False)
     return train, test
+
+
+# ######################### for inference ##########################
+def model_loader(dir_path: str, model: Callable[[Tensor], Tensor]
+                 ) -> Tuple[Dict[str, str], Callable[[Tensor], Tensor], str]:
+    """再帰的推論関数用の呼び出し関数"""
+    # ファイル情報の取得
+    files = list(pathlib.Path(dir_path).glob('*'))
+    for idx, i in enumerate(files):
+        print(f'Index: {idx}')
+        print(str(i.name))
+        print()
+
+    # インデックスの選択
+    time.sleep(0.5)
+    index = int(input('select model index'))
+
+    file_name = os.path.splitext(str(files[index].name))[0]
+    kw_path = dir_path + 'kw_inf/' + file_name + '.pkl'
+
+    # 訓練時引数の読み込み
+    with open(kw_path, 'rb') as f:
+        kwrgs = pickle.load(f)
+
+    # モデルパラメータの上書き
+    file_path = str(files[index])
+    model_kw = kwrgs['model']
+    ride_model = model(**model_kw)
+    ride_model.load_state_dict(torch.load(file_path))
+
+    return kwrgs['dataset'], ride_model, file_name
