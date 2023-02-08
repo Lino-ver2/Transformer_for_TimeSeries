@@ -46,27 +46,22 @@ def training_with_auxiliary(model: Callable[[Tensor], Tensor],
                 # 勾配計算
                 loss.backward()
                 optimizer.step()
-
             # モデル評価
             training_eval(model, optimizer, criterion, inputs,
                           epoch_loss, 'eval')
             # データをキャッシュに保存して次回の訓練データにする
             cache = inputs
-
         # テストデータによる評価
         for pack in test:
             inputs = [content.to(device) for content in pack]
             training_eval(model, optimizer, criterion, inputs,
                           epoch_loss, 'test')
-
         # 損失データの登録
         appender(loss_pack, epoch_loss, 'train')
         appender(loss_pack, epoch_loss, 'eval')
         appender(loss_pack, epoch_loss, 'test')
-
         # lossのログを表示
         logger(verbose, epoch, center, epoch_loss)
-        time.sleep(0.5)
     print(' complete!! '.center(center, '-'))
     print(f'Execution_time: {round(time.time() - start_point, 3)}')
     return loss_pack
@@ -143,12 +138,14 @@ def training(model: Callable[[Tensor], Tensor],
              criterion: object,
              optimizer: object,
              epochs: int,
+             early_stopping: Optional[int] = None,
              verbose=10,
              center=80) -> Tuple[object, Tensor, Tensor]:
     """訓練用関数"""
     train_loss = []
     validation_loss = []
     test_loss = []
+    stop_counter = 0
     print(' start '.center(center, '-'))
     start_point = time.time()
     for epoch in range(epochs):
@@ -187,20 +184,29 @@ def training(model: Callable[[Tensor], Tensor],
             output = model(src, tgt)
             loss = criterion(output.reshape(-1), y.reshape(-1))
             test_epoch_loss.append(loss.item())
-
+        # 損失情報の保存
         validation_loss.append(validation_epoch_loss)
         train_loss.append(train_epoch_loss)
         test_loss.append(test_epoch_loss)
+        # early_stoppingのカウント
+        train_mean = torch.mean(torch.tensor(train_epoch_loss)).item()
+        valid_mean = torch.mean(torch.tensor(validation_epoch_loss)).item()
+        test_mean = torch.mean(torch.tensor(test_epoch_loss)).item()
+        if (early_stopping is not None) and train_mean < test_mean:
+            stop_counter += 1
 
         if epoch % verbose == 0:
             print(f' epoch_{epoch} '.center(center))
-            train_mean = torch.mean(torch.tensor(train_epoch_loss)).item()
-            valid_mean = torch.mean(torch.tensor(validation_epoch_loss)).item()
-            test_mean = torch.mean(torch.tensor(test_epoch_loss)).item()
             print('train_loss: ', round(train_mean, 4),
                   '| validation_loss: ', round(valid_mean, 4),
                   '| test_loss: ', round(test_mean, 4))
-
+        # early_stopping
+        if stop_counter == early_stopping:
+            print(f'early stopping was executed with {epoch} epoch')
+            break
+        # ログ表示用のディレイ
+        time.sleep(0.5)
+    # 実行完了時出力
     print(' complete!! '.center(center, '-'))
     print(f'Execution_time: {round(time.time() - start_point, 3)}')
     packs = (train_loss, validation_loss, test_loss)

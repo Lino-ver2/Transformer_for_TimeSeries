@@ -50,25 +50,7 @@ def mode_of_freq(data: DataFrame,
     return mode_of_key()
 
 
-def mode_of_freq(data: DataFrame,
-                 key='date',
-                 freq='D',
-                 mode='sum'
-                 ) -> DataFrame:
-    """時系列データを基本統計量で統合する
-    引数:
-        data: 対象を含むオリジナルデータ
-        key: 時間軸のカラム名
-        freq: グループ単位（D: 日ごと, M: 月ごと, Y: 年ごと）
-        mode: 統計量（sum, mean, etc）
-    """
-    # 日付をobjectからdate_time型に変更
-    data[key] = pd.to_datetime(data[key], format=('%d.%m.%Y'))
-    # 時系列(key)についてグループ単位(freq)の売上数の基本統計量(mode)で出力
-    mode_of_key = getattr(data.groupby(pd.Grouper(key=key, freq=freq)), mode)
-    return mode_of_key()
-
-
+# ########################### 多変量拡張データセット ###############################
 def tde_dataset_wm(data: Series,
                    seq: int,
                    d_model: int,
@@ -83,16 +65,16 @@ def tde_dataset_wm(data: Series,
                    monthly: bool,
                    train_rate: float,
                    ) -> Tuple[DataLoader]:
-    """TDEに対応した曜日ラベルと月ラベル付与したデータセットのメイン関数"""
+    """多次元データセットのメイン関数"""
     df = data.copy()
     if scaler is not None:
         data_index = data.index
         values = scaler().fit_transform(data.values.reshape(-1, 1))
         df[data_index] = values.reshape(-1)
     tded, label = delay_embeddings(df,
+                                   seq,
                                    d_model,
                                    dilation,
-                                   seq,
                                    src_tgt_seq,
                                    step_num,
                                    daily, weekday, weekly, monthly)
@@ -101,8 +83,12 @@ def tde_dataset_wm(data: Series,
     return train, test
 
 
-def delay_embeddings(data: Series, d_model: int, dilation: int, seq: int,
-                     src_tgt_seq: Tuple[int], step_num: int,
+def delay_embeddings(data: Series,
+                     seq: int,
+                     d_model: int,
+                     dilation: int,
+                     src_tgt_seq: Tuple[int],
+                     step_num: int,
                      daily: bool, weekday: bool, weekly: bool, monthly: bool
                      ) -> Tuple[ndarray]:
     """TDEに対応した曜日、月時ラベルをconcatする"""
@@ -113,7 +99,7 @@ def delay_embeddings(data: Series, d_model: int, dilation: int, seq: int,
 
     # デイリーラベル
     if daily:
-        scaled_day = index.day / 31  # 0-1正規化
+        scaled_day = (index.day - 1) / 31  # 0-1正規化
         day, _ = expand_and_split(scaled_day, seq, src_tgt_seq[1], step_num)
         tded_day = time_delay_embedding(day, None, d_model, dilation)
         tded = np.concatenate((tded, tded_day), axis=2)
@@ -218,6 +204,87 @@ def to_torch_dataset(src: ndarray, tgt: ndarray, label: ndarray,
     test = TensorDataset(*test_pack)
     test = DataLoader(test, batch_size=1, shuffle=False)
     return train, test
+
+
+# ############################ 単変量データセット #################################
+def univariate_dataset(data: Series,
+                       seq: int,
+                       dilation: int,
+                       src_tgt_seq: Tuple[int],
+                       step_num: int,
+                       batch_size: int,
+                       scaler: Optional[Union[StandardScaler, MinMaxScaler]],
+                       daily: bool, weekday: bool, weekly:  bool, monthly: bool,
+                       train_rate: float,
+                       ) -> Tuple[DataLoader]:
+    """単変量データセットのメイン関数"""
+    df = data.copy()
+    if scaler is not None:
+        data_index = data.index
+        values = scaler().fit_transform(data.values.reshape(-1, 1))
+        df[data_index] = values.reshape(-1)
+
+    x, y = concat_category(df,
+                           seq,
+                           dilation,
+                           src_tgt_seq,
+                           step_num,
+                           daily, weekday, weekly, monthly)
+    src, tgt = src_tgt_split(x, *src_tgt_seq)
+    train, test = to_torch_dataset(src, tgt, y, batch_size, train_rate)
+    return train, test
+
+
+def concat_category(df: Series,
+                    seq: int,
+                    dilation: int,
+                    src_tgt_seq: Tuple[int],
+                    step_num: int,
+                    daily: bool, weekday: bool, weekly: bool, monthly: bool
+                    ) -> Tuple[ndarray]:
+    tgt_seq = src_tgt_seq[1]
+    x, y = uni_split(df, seq, dilation, tgt_seq, step_num)
+    x = np.expand_dims(x, 1)
+
+    index = df.index
+    if daily:
+        scaled_day = (index.day - 1) / 31  # 0-1正規化
+        inf_day, _ = uni_split(scaled_day, seq, dilation, tgt_seq, step_num)
+        inf_day = np.expand_dims(inf_day, 1)
+        x = np.concatenate((x, inf_day), axis=1)
+
+    if weekday:
+        scaled_weekday = index.weekday / 6  # 0-1正規化
+        inf_weekday, _ = uni_split(scaled_weekday, seq, dilation, tgt_seq, step_num)
+        inf_weekday = np.expand_dims(inf_weekday, 1)
+        x = np.concatenate((x, inf_weekday), axis=1)
+
+    if weekly:
+        scaled_week_num = (index.isocalendar().week - 1) / 44
+        inf_weekly, _ = uni_split(scaled_week_num, seq, dilation, tgt_seq, step_num)
+        inf_weekly = np.expand_dims(inf_weekly, 1)
+        x = np.concatenate((x, inf_weekly), axis=1)
+
+    if monthly:
+        scaled_month = (index.month - 1) / 11
+        inf_monthly, _ = uni_split(scaled_month, seq, dilation, tgt_seq, step_num)
+        inf_monthly = np.expand_dims(inf_monthly, 1)
+        x = np.concatenate((x, inf_monthly), axis=1)
+
+    return x.transpose(0, 2, 1), y
+
+
+def uni_split(ds: Series, seq: int, dilation: int, tgt_seq: Tuple[int],
+              step_num: int) -> Tuple[ndarray]:
+    data = ds.copy().values
+    x_range =  seq * (dilation + 1)
+    num = len(data) - x_range - step_num + 1
+    x = np.array([data[i: i + x_range: dilation + 1] for i in range(num)])
+
+    y_start = x_range - dilation - tgt_seq + step_num
+    y_end = x_range - dilation + step_num
+    y = np.array([data[i + y_start : i + y_end] for i in range(num)])
+    return x, y
 
 
 # ######################### for inference ##########################
