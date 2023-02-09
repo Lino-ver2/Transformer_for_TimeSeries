@@ -59,17 +59,56 @@ def confirmation(model, train, test, device):
     return train_preds, test_preds
 
 
-def to_time_series(original,
-                   train_preds,
-                   test_preds,
-                   scaler,
-                   d_model,
-                   dilation,
-                   seq):
+def val_time_series(original,
+                    train_preds,
+                    test_preds,
+                    scaler,
+                    d_model,
+                    dilation,
+                    seq):
     """推測値をプロットできるようにインデックスを整える"""
     # 比較用に訓練に使用した時系列データを用意
     # 訓練データ, テストデータとのラグを計算
     lag = d_model * (dilation + 1) + seq
+
+    fit_target = original.values.reshape(-1, 1)
+    src = scaler().fit(fit_target)
+
+    # 予測データを ndarray に変換してプロットできるようにする
+    train_pred = torch.concat(train_preds).reshape(-1).detach().numpy()
+    test_pred = torch.concat(test_preds).reshape(-1).detach().numpy()
+
+    # 予測データの標準化を解除
+    train_pred = src.inverse_transform(train_pred.reshape(-1, 1)).reshape(-1)
+    test_pred = src.inverse_transform(test_pred.reshape(-1, 1)).reshape(-1)
+
+    # 訓練データラベルのラグを修正
+    tr_start = original.index[0] + datetime.timedelta(lag)
+    tr_end = tr_start + datetime.timedelta(len(train_pred) - 1)
+    tr_idx = pd.date_range(tr_start, tr_end)
+    # ラグを修正したインデックスでプロット用の訓練予測データを作成
+    train_time_series = pd.Series(train_pred, index=tr_idx)
+
+    # テストデータのラグを修正
+    te_start = tr_end + datetime.timedelta(1)
+    te_end = te_start + datetime.timedelta(len(test_pred) - 1)
+    te_idx = pd.date_range(te_start, te_end)
+    # ラグを修正したインデックスでプロロット用のテスト予測データを作成
+    test_time_series = pd.Series(test_pred, index=te_idx)
+    return train_time_series, test_time_series, original
+
+
+def uni_time_series(original,
+                    train_preds,
+                    test_preds,
+                    scaler,
+                    d_model,
+                    dilation,
+                    seq):
+    """推測値をプロットできるようにインデックスを整える"""
+    # 比較用に訓練に使用した時系列データを用意
+    # 訓練データ, テストデータとのラグを計算
+    lag = seq * (dilation + 1)
 
     fit_target = original.values.reshape(-1, 1)
     src = scaler().fit(fit_target)

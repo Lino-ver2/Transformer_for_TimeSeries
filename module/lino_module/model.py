@@ -30,12 +30,17 @@ class TransformerModel(nn.Module):
     """Trasnsormer for Time Series
         参考論文: https://arxiv.org/abs/2001.08317
     """
-    def __init__(self, d_model: int, nhead: int, device):
+    def __init__(self, d_model: int, nhead: int,
+                 device, input_dim: Optional[int] = None, ):
+
         super(TransformerModel, self).__init__()
         self.device = device
+        self.input_dim = input_dim
+        if input_dim is not None:
+            self.input_linear = nn.Linear(input_dim, d_model)
+
         self.positional = PositionalEncoding(d_model)
         self.mask_generator = MaskGenerator()
-
         encoder_layer = nn.TransformerEncoderLayer(
                                                 d_model,
                                                 nhead,
@@ -60,6 +65,8 @@ class TransformerModel(nn.Module):
         self.linear = nn.Linear(d_model, 1)
 
     def forward(self, src: Tensor, tgt: Tensor) -> Tensor:
+        if self.input_dim is not None:
+            src, tgt = self.input_linear(src), self.input_linear(tgt)
         # Decoder用のtgt_maskを作成
         _, tgt_seq, _ = tgt.shape
         self.tgt_mask = self.mask_generator(tgt_seq).to(self.device)  # A-look ahead mask
