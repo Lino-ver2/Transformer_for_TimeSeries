@@ -9,11 +9,14 @@ from sklearn.preprocessing import StandardScaler, MinMaxScaler
 import torch
 from torch.utils.data import TensorDataset
 
+from module.lino_module.model import WithAuxiliary
+
 from typing import Tuple, Dict, Optional, Union, Callable
 from pandas import DataFrame, Series
 from numpy import ndarray
 from torch import Tensor
 from torch.utils.data import DataLoader
+from colorama import Fore, Style
 
 
 # 「mps」ではTransfomerのattnでエラーが出る
@@ -277,13 +280,13 @@ def concat_category(df: Series,
 def uni_split(ds: Series, seq: int, dilation: int, tgt_seq: Tuple[int],
               step_num: int) -> Tuple[ndarray]:
     data = ds.copy().values
-    x_range =  seq * (dilation + 1)
+    x_range = seq * (dilation + 1)
     num = len(data) - x_range - step_num + 1
     x = np.array([data[i: i + x_range: dilation + 1] for i in range(num)])
 
     y_start = x_range - dilation - tgt_seq + step_num
     y_end = x_range - dilation + step_num
-    y = np.array([data[i + y_start : i + y_end] for i in range(num)])
+    y = np.array([data[i + y_start: i + y_end] for i in range(num)])
     return x, y
 
 
@@ -304,6 +307,7 @@ def model_loader(dir_path: str, model: Callable[[Tensor], Tensor]
 
     file_name = os.path.splitext(str(files[index].name))[0]
     kw_path = dir_path + 'kw_inf/' + file_name + '.pkl'
+    print(Fore.YELLOW + f'selected model :\n{file_name}' + Style.RESET_ALL)
 
     # 訓練時引数の読み込み
     with open(kw_path, 'rb') as f:
@@ -316,3 +320,35 @@ def model_loader(dir_path: str, model: Callable[[Tensor], Tensor]
     ride_model.load_state_dict(torch.load(file_path))
 
     return kwrgs['dataset'], ride_model, file_name
+
+
+def auxiliary_model_loader(dir_path, base_model, auxiliary_model):
+    """再帰的推論関数用の呼び出し関数"""
+    # ファイル情報の取得
+    files = list(pathlib.Path(dir_path).glob('*'))
+    for idx, i in enumerate(files):
+        print(f'Index: {idx}')
+        print(str(i.name))
+        print()
+
+    # インデックスの選択
+    time.sleep(0.5)
+    index = int(input('select model index'))
+    file_name = os.path.splitext(str(files[index].name))[0]
+    kw_path = dir_path + 'kw_inf/' + file_name + '.pkl'
+    print(Fore.YELLOW + f'selected model :\n{file_name}' + Style.RESET_ALL)
+
+    # 訓練時引数の読み込み
+    with open(kw_path, 'rb') as f:
+        kwrgs = pickle.load(f)
+
+    # モデルパラメータの上書き
+    file_path = str(files[index])
+
+    base_model = base_model(**kwrgs['base_model'])
+    auxiliary_model = auxiliary_model(**kwrgs['auxiliary_model'])
+    ride_model = WithAuxiliary(base_model, auxiliary_model)
+    ride_model.load_state_dict(torch.load(file_path))
+
+    return kwrgs['dataset'], ride_model, file_name
+
